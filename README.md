@@ -1,5 +1,6 @@
 # Modlist Manager
 
+[![CI](https://github.com/briggsyj/zomboid-modlist-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/briggsyj/zomboid-modlist-manager/actions/workflows/ci.yml)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](LICENSE)
 
 A small .NET 10 Blazor Web App for managing Steam Workshop mod requests for a Project Zomboid server.
@@ -150,6 +151,27 @@ deletes it.
 
 The image is pinned to `linux/amd64` in `docker-compose.yml`, which is only actually required for
 the optional SteamCMD path.
+
+## CI / releases
+
+- **`ci.yml`** runs on every pull request and push to `main`: restores, builds, runs the test suite,
+  and separately builds the Docker image (without publishing) - the Dockerfile has broken before in
+  ways `dotnet build` can't catch.
+- **`release.yml`** runs on `v*` tags: runs the tests, then builds and pushes a multi-arch
+  (`linux/amd64` + `linux/arm64`) image to the GitHub Container Registry.
+
+To cut a release:
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+That publishes `ghcr.io/briggsyj/zomboid-modlist-manager` tagged `1.0.0`, `1.0`, `1` and `latest`.
+No secrets to configure - it authenticates with the built-in `GITHUB_TOKEN`. Note that GHCR packages
+default to private; make the package public from its GitHub page if you want unauthenticated pulls.
+
+The arm64 image is only possible while SteamCMD stays out of the image (it's 32-bit x86 and its
+i386 dependencies have no arm64 build), so an `INSTALL_STEAMCMD=true` image must be amd64-only.
 
 ## Project structure
 
