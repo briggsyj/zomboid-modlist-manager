@@ -130,6 +130,25 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
         return await query.ToListAsync();
     }
 
+    /// <summary>
+    /// Requests in any of the given statuses, newest first. Lets a caller fetch several statuses in
+    /// one round trip rather than querying per status.
+    /// </summary>
+    public async Task<List<ModRequest>> GetRequestsByStatusAsync(params RequestStatus[] statuses)
+    {
+        if (statuses.Length == 0)
+        {
+            return [];
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        return await db.ModRequests
+            .Include(r => r.Mod!).ThenInclude(m => m.PzModIds)
+            .Where(r => statuses.Contains(r.Status))
+            .OrderByDescending(r => r.CreatedAtUtc)
+            .ToListAsync();
+    }
+
     /// <summary>The current modlist: every Mod with at least one approved request, optionally filtered by game.</summary>
     public async Task<List<Mod>> GetModlistAsync(string? game = null)
     {
