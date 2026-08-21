@@ -1,0 +1,16 @@
+.name-autocomplete {
+    position: relative;
+}
+
+.name-autocomplete-list {
+    position: absolute;
+    z-index: 1000;
+    width: 100%;
+    max-height: 12rem;
+    overflow-y: auto;
+    margin-top: 0.125rem;
+}
+
+.name-autocomplete-list .list-group-item {
+    cursor: pointer;
+}

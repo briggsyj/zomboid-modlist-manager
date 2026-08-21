@@ -1,0 +1,161 @@
+@page "/admin"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using ModlistManager.Data.Entities
+@using ModlistManager.Services
+@inject ModRequestService ModRequestService
+
+<PageTitle>Admin - Requests</PageTitle>
+
+<h1>Admin</h1>
+
+<div class="btn-group mb-3" role="group">
+    @foreach (var option in _filterOptions)
+    {
+        <button type="button" class="btn @(option == _filter ? "btn-primary" : "btn-outline-primary")"
+                @onclick="() => SetFilterAsync(option)">
+            @(option?.ToString() ?? "All")
+        </button>
+    }
+</div>
+
+@if (_requests is null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_requests.Count == 0)
+{
+    <p><em>No requests in this view.</em></p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Game</th>
+                    <th>Workshop item</th>
+                    <th>Requested by</th>
+                    <th>Status</th>
+                    <th>Mod IDs</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var request in _requests)
+                {
+                    <tr>
+                        <td>@request.Title</td>
+                        <td>@request.Game</td>
+                        <td><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=@request.WorkshopId" target="_blank" rel="noopener noreferrer">@request.WorkshopId</a></td>
+                        <td>@request.RequesterName</td>
+                        <td><span class="badge @StatusBadgeClass(request.Status)">@request.Status</span></td>
+                        <td style="min-width: 16rem;">
+                            <span class="badge @FetchStatusBadgeClass(request.FetchStatus)">@request.FetchStatus</span>
+                            @if (!string.IsNullOrWhiteSpace(request.FetchLog))
+                            {
+                                <div class="small text-muted" style="white-space: pre-wrap;">@request.FetchLog</div>
+                            }
+                            <ul class="list-unstyled mb-1 mt-1">
+                                @foreach (var modId in request.ModIds)
+                                {
+                                    <li>
+                                        <code>@modId.ModId</code>
+                                        @if (!string.IsNullOrWhiteSpace(modId.ModName)) { <span class="text-muted"> (@modId.ModName)</span> }
+                                        @if (modId.IsManual) { <span class="badge bg-secondary">manual</span> }
+                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1" @onclick="() => DeleteModIdAsync(modId.Id)">remove</button>
+                                    </li>
+                                }
+                            </ul>
+                            <div class="input-group input-group-sm">
+                                <input class="form-control" placeholder="Add mod ID" @bind="_pendingModId[request.Id]" @bind:event="oninput" />
+                                <button class="btn btn-outline-secondary" type="button" @onclick="() => AddManualModIdAsync(request.Id)">Add</button>
+                            </div>
+                            @if (request.FetchStatus == ModIdFetchStatus.Failed)
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-warning mt-1" @onclick="() => RetryFetchAsync(request.Id)">Retry fetch</button>
+                            }
+                        </td>
+                        <td class="text-nowrap">
+                            <button type="button" class="btn btn-sm btn-success" @onclick="() => SetStatusAsync(request.Id, RequestStatus.Approved)">Approve</button>
+                            <button type="button" class="btn btn-sm btn-warning" @onclick="() => SetStatusAsync(request.Id, RequestStatus.Backlogged)">Backlog</button>
+                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => SetStatusAsync(request.Id, RequestStatus.Declined)">Decline</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private readonly RequestStatus?[] _filterOptions = [RequestStatus.Pending, RequestStatus.Backlogged, RequestStatus.Approved, RequestStatus.Declined, null];
+    private RequestStatus? _filter = RequestStatus.Pending;
+    private List<ModRequest>? _requests;
+    private readonly Dictionary<int, string> _pendingModId = new();
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _requests = await ModRequestService.GetRequestsAsync(_filter);
+        foreach (var request in _requests)
+        {
+            _pendingModId.TryAdd(request.Id, string.Empty);
+        }
+    }
+
+    private async Task SetFilterAsync(RequestStatus? status)
+    {
+        _filter = status;
+        await RefreshAsync();
+    }
+
+    private async Task SetStatusAsync(int requestId, RequestStatus status)
+    {
+        await ModRequestService.SetStatusAsync(requestId, status);
+        await RefreshAsync();
+    }
+
+    private async Task RetryFetchAsync(int requestId)
+    {
+        await ModRequestService.RetryFetchAsync(requestId);
+        await RefreshAsync();
+    }
+
+    private async Task AddManualModIdAsync(int requestId)
+    {
+        if (!_pendingModId.TryGetValue(requestId, out var modId) || string.IsNullOrWhiteSpace(modId))
+        {
+            return;
+        }
+
+        await ModRequestService.AddManualModIdAsync(requestId, modId, null);
+        _pendingModId[requestId] = string.Empty;
+        await RefreshAsync();
+    }
+
+    private async Task DeleteModIdAsync(int modRequestModIdId)
+    {
+        await ModRequestService.DeleteModIdAsync(modRequestModIdId);
+        await RefreshAsync();
+    }
+
+    private static string StatusBadgeClass(RequestStatus status) => status switch
+    {
+        RequestStatus.Approved => "bg-success",
+        RequestStatus.Backlogged => "bg-warning text-dark",
+        RequestStatus.Declined => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private static string FetchStatusBadgeClass(ModIdFetchStatus status) => status switch
+    {
+        ModIdFetchStatus.Completed => "bg-success",
+        ModIdFetchStatus.Processing => "bg-info text-dark",
+        ModIdFetchStatus.Failed => "bg-danger",
+        _ => "bg-secondary"
+    };
+}

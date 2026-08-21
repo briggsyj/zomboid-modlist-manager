@@ -1,0 +1,25 @@
+@page "/login"
+@* Deliberately static (no @rendermode): a plain HTML form POSTs straight to the /login
+   minimal API endpoint, which is the only place that can call HttpContext.SignInAsync. *@
+
+<PageTitle>Admin Login</PageTitle>
+
+<h1>Admin Login</h1>
+
+@if (Error is not null)
+{
+    <div class="alert alert-danger">Incorrect password.</div>
+}
+
+<form method="post" action="/account/login" class="col-md-4">
+    <div class="mb-3">
+        <label class="form-label" for="password">Password</label>
+        <input id="password" name="password" type="password" class="form-control" required autofocus />
+    </div>
+    <button type="submit" class="btn btn-primary">Log in</button>
+</form>
+
+@code {
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+}

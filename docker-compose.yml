@@ -1,0 +1,18 @@
+services:
+  modlist-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # SteamCMD (used to look up Project Zomboid Mod IDs) only ships an x86/i386 Linux build.
+    # Pinning amd64 lets this run correctly under emulation on Apple Silicon / arm64 hosts too.
+    platform: linux/amd64
+    ports:
+      - "8080:8080"
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in a .env file next to docker-compose.yml}
+    volumes:
+      - modlist-data:/data
+    restart: unless-stopped
+
+volumes:
+  modlist-data:

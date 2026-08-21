@@ -1,0 +1,19 @@
+## .NET
+bin/
+obj/
+*.user
+
+## SQLite data
+*.db
+*.db-shm
+*.db-wal
+
+## Secrets / local overrides
+.env
+appsettings.*.local.json
+
+## Editor/OS
+.vs/
+.vscode/
+.idea/
+.DS_Store

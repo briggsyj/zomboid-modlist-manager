@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ModlistManager/ModlistManager.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ModlistManager.Tests/ModlistManager.Tests.csproj" />
+  </Folder>
+</Solution>

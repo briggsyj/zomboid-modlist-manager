@@ -1,0 +1,176 @@
+@page "/"
+@rendermode InteractiveServer
+@using ModlistManager.Data.Entities
+@using ModlistManager.Services
+@inject ModRequestService ModRequestService
+@implements IAsyncDisposable
+
+<PageTitle>Project Zomboid Mod Requests</PageTitle>
+
+<h1>Project Zomboid Mod Requests</h1>
+<p class="text-muted">Request a Steam Workshop mod for the server. An admin will review it.</p>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="h5">New request</h2>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        <EditForm Model="this" OnValidSubmit="SubmitAsync">
+            <div class="mb-3">
+                <label class="form-label" for="title">Title</label>
+                <input id="title" class="form-control" @bind="_title" @bind:event="oninput" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="workshop">Steam Workshop link or item ID</label>
+                <input id="workshop" class="form-control" placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=3783094058"
+                       @bind="_workshopInput" @bind:event="oninput" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="name">Your name</label>
+                <NameAutocomplete @bind-Value="_requesterName" Suggestions="_nameSuggestions" Placeholder="Your name" />
+            </div>
+            <button type="submit" class="btn btn-primary" disabled="@_submitting">Submit request</button>
+        </EditForm>
+    </div>
+</div>
+
+<h2 class="h5">All requests</h2>
+
+@if (_requests is null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (_requests.Count == 0)
+{
+    <p><em>No requests yet.</em></p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Game</th>
+                    <th>Workshop item</th>
+                    <th>Requested by</th>
+                    <th>Status</th>
+                    <th>Mod ID lookup</th>
+                    <th>Submitted</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var request in _requests)
+                {
+                    <tr>
+                        <td>@request.Title</td>
+                        <td>@request.Game</td>
+                        <td><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=@request.WorkshopId" target="_blank" rel="noopener noreferrer">@request.WorkshopId</a></td>
+                        <td>@request.RequesterName</td>
+                        <td><span class="badge @StatusBadgeClass(request.Status)">@request.Status</span></td>
+                        <td>
+                            <span class="badge @FetchStatusBadgeClass(request.FetchStatus)">@request.FetchStatus</span>
+                            @if (request.ModIds.Count > 0)
+                            {
+                                <div class="small text-muted">@string.Join(", ", request.ModIds.Select(m => m.ModId))</div>
+                            }
+                        </td>
+                        <td>@request.CreatedAtUtc.ToLocalTime().ToString("g")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private string _title = string.Empty;
+    private string _workshopInput = string.Empty;
+    private string? _requesterName;
+    private string? _error;
+    private bool _submitting;
+    private List<ModRequest>? _requests;
+    private List<string> _nameSuggestions = [];
+    private CancellationTokenSource? _pollCts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        _pollCts = new CancellationTokenSource();
+        _ = PollWhilePendingAsync(_pollCts.Token);
+    }
+
+    private async Task RefreshAsync()
+    {
+        _requests = await ModRequestService.GetRequestsAsync();
+        _nameSuggestions = await ModRequestService.GetDistinctRequesterNamesAsync();
+    }
+
+    private async Task PollWhilePendingAsync(CancellationToken token)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(4));
+        while (await timer.WaitForNextTickAsync(token))
+        {
+            if (_requests is null || _requests.All(r => r.FetchStatus is ModIdFetchStatus.Completed or ModIdFetchStatus.Failed))
+            {
+                continue;
+            }
+
+            await RefreshAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+        _submitting = true;
+        try
+        {
+            var result = await ModRequestService.CreateRequestAsync(_title, _workshopInput, _requesterName);
+            if (!result.Success)
+            {
+                _error = result.Error;
+                return;
+            }
+
+            _title = string.Empty;
+            _workshopInput = string.Empty;
+            _requesterName = string.Empty;
+            await RefreshAsync();
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private static string StatusBadgeClass(RequestStatus status) => status switch
+    {
+        RequestStatus.Approved => "bg-success",
+        RequestStatus.Backlogged => "bg-warning text-dark",
+        RequestStatus.Declined => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private static string FetchStatusBadgeClass(ModIdFetchStatus status) => status switch
+    {
+        ModIdFetchStatus.Completed => "bg-success",
+        ModIdFetchStatus.Processing => "bg-info text-dark",
+        ModIdFetchStatus.Failed => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_pollCts is not null)
+        {
+            await _pollCts.CancelAsync();
+            _pollCts.Dispose();
+        }
+    }
+}

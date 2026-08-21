@@ -1,0 +1,74 @@
+@* Free-text input with as-you-type suggestions drawn from existing requester names.
+   No JS interop: the dropdown-item mousedown handler calls preventDefault so the input never
+   blurs before the click is processed, avoiding the classic autocomplete blur race. *@
+
+<div class="name-autocomplete">
+    <input type="text"
+           class="form-control"
+           value="@Value"
+           placeholder="@Placeholder"
+           autocomplete="off"
+           @oninput="OnInput"
+           @onfocus="OnFocus"
+           @onblur="() => _showDropdown = false" />
+
+    @if (_showDropdown && _filtered.Count > 0)
+    {
+        <ul class="list-group name-autocomplete-list">
+            @foreach (var suggestion in _filtered)
+            {
+                <li class="list-group-item list-group-item-action"
+                    @onmousedown="() => SelectSuggestion(suggestion)"
+                    @onmousedown:preventDefault="true">
+                    @suggestion
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private List<string> _filtered = [];
+    private bool _showDropdown;
+
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<string> Suggestions { get; set; } = [];
+
+    [Parameter]
+    public string? Placeholder { get; set; }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString();
+        await ValueChanged.InvokeAsync(Value);
+        Filter();
+        _showDropdown = true;
+    }
+
+    private void OnFocus()
+    {
+        Filter();
+        _showDropdown = true;
+    }
+
+    private async Task SelectSuggestion(string suggestion)
+    {
+        Value = suggestion;
+        await ValueChanged.InvokeAsync(Value);
+        _showDropdown = false;
+    }
+
+    private void Filter()
+    {
+        var input = Value?.Trim().ToLowerInvariant() ?? string.Empty;
+        _filtered = input.Length == 0
+            ? Suggestions.Take(8).ToList()
+            : Suggestions.Where(s => s.Contains(input, StringComparison.OrdinalIgnoreCase)).Take(8).ToList();
+    }
+}
