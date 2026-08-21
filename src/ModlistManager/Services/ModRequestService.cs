@@ -130,14 +130,46 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
         return await query.ToListAsync();
     }
 
-    /// <summary>The current modlist: every Mod with at least one approved request, optionally filtered by game.</summary>
-    public async Task<List<Mod>> GetModlistAsync(string? game = null)
+    /// <summary>
+    /// The current modlist: every Mod with at least one approved request, optionally filtered by game.
+    /// </summary>
+    /// <param name="activeOnly">
+    /// Restrict to mods the server actually loads. Visitors are shown this view, so a mod an admin has
+    /// parked isn't advertised as being on the server; admins see everything so they can un-park it.
+    /// This is a query filter rather than a UI concern on purpose - the modlist page is public.
+    /// </param>
+    public async Task<List<Mod>> GetModlistAsync(string? game = null, bool activeOnly = false)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();
         var query = db.Mods
             .Include(m => m.PzModIds)
             .Include(m => m.Requests)
             .Where(m => m.IsInModlist)
+            .AsQueryable();
+        if (game is not null)
+        {
+            query = query.Where(m => m.Game == game);
+        }
+
+        if (activeOnly)
+        {
+            query = query.Where(m => m.IsActive);
+        }
+
+        return await query.OrderBy(m => m.Id).ToListAsync();
+    }
+
+    /// <summary>
+    /// Approved mods the server isn't currently loading - approved, then switched off by an admin.
+    /// The counterpart to the visitor modlist: between them they cover every approved mod.
+    /// </summary>
+    public async Task<List<Mod>> GetParkedModsAsync(string? game = null)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        var query = db.Mods
+            .Include(m => m.PzModIds)
+            .Include(m => m.Requests)
+            .Where(m => m.IsInModlist && !m.IsActive)
             .AsQueryable();
         if (game is not null)
         {

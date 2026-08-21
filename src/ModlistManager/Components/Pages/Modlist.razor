@@ -6,14 +6,22 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-@* Public: anyone can see which mods made it onto the server. Only admins get the export buttons,
-   since those are for pasting into server config. *@
+@* Public page. Visitors see the mods the server actually loads; admins additionally see parked
+   (inactive) mods, the Active toggles, and the export buttons for pasting into server config. *@
 
 <PageTitle>Modlist</PageTitle>
 
 <MudText Typo="Typo.h4" GutterBottom="true">Modlist</MudText>
 <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
-    Mods approved for the server. Want something added? <MudLink Href="">Make a request</MudLink>.
+    @if (_isAdmin)
+    {
+        <text>Every approved mod, including parked ones.</text>
+    }
+    else
+    {
+        <text>Mods currently running on the server.</text>
+    }
+    Want something added? <MudLink Href="/">Make a request</MudLink>.
 </MudText>
 
 <MudSelect T="string" Value="_selectedGame" ValueChanged="OnGameChangedAsync" Label="Game"
@@ -41,6 +49,7 @@
         <MudText Typo="Typo.caption" Class="d-block mb-4 mud-text-secondary">
             Unticking <em>Active</em> keeps the mod on the list and in the Workshop IDs export, but drops
             it from the Zomboid Mod IDs export &mdash; so the server still downloads it without loading it.
+            Parked mods are hidden from visitors, who only see what's actually running.
         </MudText>
     </Authorized>
 </AuthorizeView>
@@ -102,10 +111,13 @@ else
     private string _selectedGame = Mod.DefaultGame;
     private List<Mod>? _mods;
     private string? _copiedMessage;
+    private bool _isAdmin;
     private IJSObjectReference? _clipboardModule;
 
     protected override async Task OnInitializedAsync()
     {
+        _isAdmin = await IsAdminAsync();
+
         var distinctGames = await ModRequestService.GetDistinctGamesAsync();
         if (distinctGames.Count > 0)
         {
@@ -122,19 +134,26 @@ else
     private async Task<IJSObjectReference> GetClipboardModuleAsync() =>
         _clipboardModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/clipboard.js");
 
-    private async Task RefreshAsync() => _mods = await ModRequestService.GetModlistAsync(_selectedGame);
+    // Visitors get only what the server actually loads; admins get parked mods too.
+    private async Task RefreshAsync() =>
+        _mods = await ModRequestService.GetModlistAsync(_selectedGame, activeOnly: !_isAdmin);
+
+    private async Task<bool> IsAdminAsync()
+    {
+        if (AuthenticationStateTask is null)
+        {
+            return false;
+        }
+
+        var state = await AuthenticationStateTask;
+        return state.User.Identity?.IsAuthenticated == true;
+    }
 
     private async Task SetActiveAsync(Mod mod, bool isActive)
     {
         // The checkbox is only rendered inside AuthorizeView, but this page is public, so re-check
         // server-side rather than treating "we didn't draw the control" as the security boundary.
-        if (AuthenticationStateTask is null)
-        {
-            return;
-        }
-
-        var state = await AuthenticationStateTask;
-        if (state.User.Identity?.IsAuthenticated != true)
+        if (!await IsAdminAsync())
         {
             return;
         }
