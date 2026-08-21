@@ -38,6 +38,10 @@
                 <MudText Typo="Typo.body2" Color="Color.Success">@_copiedMessage</MudText>
             }
         </MudStack>
+        <MudText Typo="Typo.caption" Class="d-block mb-4 mud-text-secondary">
+            Unticking <em>Active</em> keeps the mod on the list and in the Workshop IDs export, but drops
+            it from the Zomboid Mod IDs export &mdash; so the server still downloads it without loading it.
+        </MudText>
     </Authorized>
 </AuthorizeView>
 
@@ -53,12 +57,24 @@ else
 {
     <MudTable Items="_mods" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
         <HeaderContent>
+            <AuthorizeView Context="auth">
+                <Authorized><MudTh>Active</MudTh></Authorized>
+            </AuthorizeView>
             <MudTh>Mod</MudTh>
             <MudTh>Mod ID</MudTh>
             <MudTh>Requested by</MudTh>
             <MudTh>Added</MudTh>
         </HeaderContent>
         <RowTemplate Context="mod">
+            <AuthorizeView Context="auth">
+                <Authorized>
+                    <MudTd DataLabel="Active">
+                        <MudCheckBox T="bool" Value="mod.IsActive"
+                                     ValueChanged="@(v => SetActiveAsync(mod, v))"
+                                     Color="Color.Primary" Dense="true" />
+                    </MudTd>
+                </Authorized>
+            </AuthorizeView>
             <MudTd DataLabel="Mod">
                 <MudLink Href="@WorkshopUrl(mod.WorkshopId)" Target="_blank">
                     @(mod.Title is { Length: > 0 } title ? title : mod.WorkshopId)
@@ -81,6 +97,9 @@ else
 }
 
 @code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
     private List<string> _games = [Mod.DefaultGame];
     private string _selectedGame = Mod.DefaultGame;
     private List<Mod>? _mods;
@@ -106,6 +125,26 @@ else
         _clipboardModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/clipboard.js");
 
     private async Task RefreshAsync() => _mods = await ModRequestService.GetModlistAsync(_selectedGame);
+
+    private async Task SetActiveAsync(Mod mod, bool isActive)
+    {
+        // The checkbox is only rendered inside AuthorizeView, but this page is public, so re-check
+        // server-side rather than treating "we didn't draw the control" as the security boundary.
+        if (AuthenticationStateTask is null)
+        {
+            return;
+        }
+
+        var state = await AuthenticationStateTask;
+        if (state.User.Identity?.IsAuthenticated != true)
+        {
+            return;
+        }
+
+        await ModRequestService.SetModActiveAsync(mod.Id, isActive);
+        mod.IsActive = isActive;
+        _copiedMessage = null;
+    }
 
     private async Task OnGameChangedAsync(string? game)
     {

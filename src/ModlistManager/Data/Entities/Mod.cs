@@ -26,6 +26,14 @@ public class Mod
     /// <summary>True once at least one request for this mod has been approved.</summary>
     public bool IsInModlist { get; set; }
 
+    /// <summary>
+    /// Whether the mod should actually be loaded by the server. Inactive mods stay on the modlist and
+    /// keep their workshop item downloaded (they're still in the WorkshopItems= export), but their
+    /// Mod IDs are left out of the Mods= export - which is how a PZ server disables a mod without
+    /// removing it. Admin-controlled from the modlist page.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+
     /// <summary>When this mod first entered the modlist. Preserved across later approve/un-approve toggles.</summary>
     public DateTime? AddedToModlistAtUtc { get; set; }
 

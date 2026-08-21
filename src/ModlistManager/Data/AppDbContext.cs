@@ -20,6 +20,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(m => m.FetchStatus).HasConversion<string>();
             entity.HasIndex(m => new { m.Game, m.WorkshopId }).IsUnique();
 
+            // Default true so mods added before this column existed stay in the Mods= export
+            // after upgrading, rather than all silently going inactive.
+            entity.Property(m => m.IsActive).HasDefaultValue(true);
+
             entity.HasMany(m => m.PzModIds)
                 .WithOne(p => p.Mod)
                 .HasForeignKey(p => p.ModId)

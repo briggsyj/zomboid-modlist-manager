@@ -180,6 +180,23 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
         await db.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// Marks a mod as active (loaded by the server) or inactive. Inactive mods stay on the modlist
+    /// and keep their workshop item in the WorkshopItems= export, but drop out of Mods=.
+    /// </summary>
+    public async Task SetModActiveAsync(int modId, bool isActive)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        var mod = await db.Mods.FirstOrDefaultAsync(m => m.Id == modId);
+        if (mod is null)
+        {
+            return;
+        }
+
+        mod.IsActive = isActive;
+        await db.SaveChangesAsync();
+    }
+
     public async Task RetryFetchAsync(int modId)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();
@@ -228,7 +245,11 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
         await db.SaveChangesAsync();
     }
 
-    /// <summary>Semicolon-delimited Steam Workshop item IDs for every mod currently on a modlist, regardless of game.</summary>
+    /// <summary>
+    /// Semicolon-delimited Steam Workshop item IDs for every mod currently on a modlist, regardless
+    /// of game. Deliberately includes inactive mods: the server should still download the item so
+    /// the mod can be switched back on without a re-download.
+    /// </summary>
     public async Task<string> BuildApprovedWorkshopIdExportAsync()
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();
@@ -243,12 +264,13 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
     /// <summary>
     /// Semicolon-delimited Project Zomboid Mod IDs for mods currently on the Project Zomboid modlist,
     /// each prefixed with a backslash (matching the Mods= line format PZ server configs expect).
+    /// Only active mods are included - that's what makes a mod inactive.
     /// </summary>
     public async Task<string> BuildApprovedZomboidModIdExportAsync()
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();
         var modIds = await db.Mods
-            .Where(m => m.IsInModlist && m.Game == Mod.DefaultGame)
+            .Where(m => m.IsInModlist && m.IsActive && m.Game == Mod.DefaultGame)
             .OrderBy(m => m.Id)
             .SelectMany(m => m.PzModIds)
             .Select(p => p.Value)
