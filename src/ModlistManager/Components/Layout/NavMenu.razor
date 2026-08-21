@@ -1,7 +1,9 @@
 @* Rendered inside the MudAppBar. The logout action stays a real form POST because signing out
    needs HttpContext, which an interactive circuit can't touch after the initial response. *@
 
-<MudButton Href="" Variant="Variant.Text" Color="Color.Inherit">Requests</MudButton>
+@* Href must be "/" rather than "": MudButton renders a plain <button> for an empty Href, which
+   silently makes the link do nothing. *@
+<MudButton Href="/" Variant="Variant.Text" Color="Color.Inherit">Requests</MudButton>
 <MudButton Href="modlist" Variant="Variant.Text" Color="Color.Inherit">Modlist</MudButton>
 
 <MudSpacer />
