@@ -20,15 +20,19 @@
         }
 
         @* Plain HTML form posting to a minimal API endpoint - deliberately not an EditForm/OnValidSubmit,
-           so creating a request never depends on the interactive SignalR circuit having connected. *@
+           so creating a request never depends on the interactive SignalR circuit having connected.
+           Title/workshop are still @bind'd (not just plain inputs) so that typing in the interactive
+           NameAutocomplete below - which re-renders this component - doesn't wipe them back to empty;
+           Blazor only preserves a native input's value across re-renders once it's tracking it itself. *@
         <form method="post" action="/requests">
             <div class="mb-3">
                 <label class="form-label" for="title">Title</label>
-                <input id="title" name="title" class="form-control" />
+                <input id="title" name="title" class="form-control" @bind="_title" @bind:event="oninput" />
             </div>
             <div class="mb-3">
                 <label class="form-label" for="workshop">Steam Workshop link or item ID</label>
-                <input id="workshop" name="workshopInput" class="form-control" placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=3783094058" />
+                <input id="workshop" name="workshopInput" class="form-control" placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=3783094058"
+                       @bind="_workshopInput" @bind:event="oninput" />
             </div>
             <div class="mb-3">
                 <label class="form-label" for="name">Your name</label>
@@ -92,6 +96,8 @@ else
     [SupplyParameterFromQuery(Name = "error")]
     public string? Error { get; set; }
 
+    private string _title = string.Empty;
+    private string _workshopInput = string.Empty;
     private List<ModRequest>? _requests;
     private List<string> _nameSuggestions = [];
     private CancellationTokenSource? _pollCts;

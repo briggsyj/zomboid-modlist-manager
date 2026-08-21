@@ -3,11 +3,12 @@
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY src/ModlistManager/ModlistManager.csproj ModlistManager/
-RUN dotnet restore ModlistManager/ModlistManager.csproj
-
+# Restore and publish against the full source tree in one go. A csproj-only restore step (common
+# Docker layer-caching trick) breaks Static Web Assets discovery here: razor-component-colocated
+# JS and even blazor.web.js itself end up silently missing from the publish output, which kills
+# every interactive feature client-side with no server-side error at all.
 COPY src/ModlistManager/ ModlistManager/
-RUN dotnet publish ModlistManager/ModlistManager.csproj -c Release -o /app/publish --no-restore
+RUN dotnet publish ModlistManager/ModlistManager.csproj -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
