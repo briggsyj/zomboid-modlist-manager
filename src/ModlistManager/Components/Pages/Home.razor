@@ -7,89 +7,134 @@
 
 <PageTitle>Project Zomboid Mod Requests</PageTitle>
 
-<h1>Project Zomboid Mod Requests</h1>
-<p class="text-muted">Request a Steam Workshop mod for the server. An admin will review it.</p>
+<MudText Typo="Typo.h4" GutterBottom="true">Project Zomboid Mod Requests</MudText>
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Request a Steam Workshop mod for the server. An admin will review it.
+</MudText>
 
-<div class="card mb-4">
-    <div class="card-body">
-        <h2 class="h5">New request</h2>
+<MudCard Elevation="2" Class="mb-8">
+    <MudCardContent>
+        <MudText Typo="Typo.h6" GutterBottom="true">New request</MudText>
 
         @if (Error is not null)
         {
-            <div class="alert alert-danger">@Error</div>
+            <MudAlert Severity="Severity.Error" Class="mb-4">@Error</MudAlert>
         }
 
-        @* Plain HTML form posting to a minimal API endpoint - deliberately not an EditForm/OnValidSubmit,
-           so creating a request never depends on the interactive SignalR circuit having connected.
-           Title/workshop are still @bind'd (not just plain inputs) so that typing in the interactive
-           NameAutocomplete below - which re-renders this component - doesn't wipe them back to empty;
-           Blazor only preserves a native input's value across re-renders once it's tracking it itself. *@
+        @* Plain HTML form posting to a minimal API endpoint - deliberately not an EditForm, so
+           creating a request never depends on the interactive circuit having connected. The fields
+           are still bound so typing in one (which re-renders this component) doesn't wipe the others. *@
         <form method="post" action="/requests">
-            <div class="mb-3">
-                <label class="form-label" for="title">Title</label>
-                <input id="title" name="title" class="form-control" @bind="_title" @bind:event="oninput" />
+            <MudTextField T="string" @bind-Value="_title" Immediate="true"
+                          Label="Title" Variant="Variant.Outlined" Class="mb-4"
+                          name="title" id="title" />
+
+            <MudTextField T="string" @bind-Value="_workshopInput" Immediate="true"
+                          Label="Steam Workshop link or item ID" Variant="Variant.Outlined"
+                          Placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=3783094058"
+                          OnBlur="CheckForDuplicateAsync"
+                          name="workshopInput" id="workshop" />
+
+            @if (_existingRequests.Count > 0)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2 mb-4">
+                    <MudText Typo="Typo.body2">
+                        <strong>Already requested.</strong>
+                        @if (_existingRequests[0].ModTitle is { Length: > 0 } modTitle)
+                        {
+                            <text> This is <em>@modTitle</em>.</text>
+                        }
+                    </MudText>
+                    @foreach (var existing in _existingRequests)
+                    {
+                        <MudText Typo="Typo.body2">
+                            &ldquo;@existing.Title&rdquo; by @existing.RequesterName
+                            <MudChip T="string" Size="Size.Small" Color="@StatusColor(existing.Status)">@existing.Status</MudChip>
+                        </MudText>
+                    }
+                    <MudText Typo="Typo.caption">
+                        You can still submit &mdash; it will be added as another vote for the same mod.
+                    </MudText>
+                </MudAlert>
+            }
+            else
+            {
+                <div class="mb-4"></div>
+            }
+
+            <div class="mb-4">
+                <NameAutocomplete Id="name" Name="requesterName" Label="Your name"
+                                  @bind-Value="_requesterName" Suggestions="_nameSuggestions" />
             </div>
-            <div class="mb-3">
-                <label class="form-label" for="workshop">Steam Workshop link or item ID</label>
-                <input id="workshop" name="workshopInput" class="form-control" placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=3783094058"
-                       @bind="_workshopInput" @bind:event="oninput" />
-            </div>
-            <div class="mb-3">
-                <label class="form-label" for="name">Your name</label>
-                <NameAutocomplete Id="name" Name="requesterName" Suggestions="_nameSuggestions" Placeholder="Your name" />
-            </div>
-            <button type="submit" class="btn btn-primary">Submit request</button>
+
+            <MudTextField T="string" @bind-Value="_reason" Immediate="true"
+                          Label="Why do we need it? (optional)" Variant="Variant.Outlined"
+                          Lines="3" Class="mb-4"
+                          Placeholder="What does this mod add, and why is it worth having on the server?"
+                          name="reason" id="reason" />
+
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">
+                Submit request
+            </MudButton>
         </form>
-    </div>
-</div>
+    </MudCardContent>
+</MudCard>
 
-<h2 class="h5">All requests</h2>
+<MudText Typo="Typo.h6">Pending requests</MudText>
+<MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+    Waiting on an admin decision. Approved mods appear on the <MudLink Href="modlist">modlist</MudLink>.
+</MudText>
 
-@if (_requests is null)
+@if (_pendingRequests is null)
 {
-    <p><em>Loading...</em></p>
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
 }
-else if (_requests.Count == 0)
+else if (_pendingRequests.Count == 0)
 {
-    <p><em>No requests yet.</em></p>
+    <MudAlert Severity="Severity.Normal" Dense="true">Nothing pending right now.</MudAlert>
 }
 else
 {
-    <div class="table-responsive">
-        <table class="table table-sm align-middle">
-            <thead>
-                <tr>
-                    <th>Title</th>
-                    <th>Game</th>
-                    <th>Workshop item</th>
-                    <th>Requested by</th>
-                    <th>Status</th>
-                    <th>Mod ID lookup</th>
-                    <th>Submitted</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var request in _requests)
+    <MudTable Items="_pendingRequests" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Mod</MudTh>
+            <MudTh>Requested by</MudTh>
+            <MudTh>Reason</MudTh>
+            <MudTh>Mod ID</MudTh>
+            <MudTh>Submitted</MudTh>
+        </HeaderContent>
+        <RowTemplate Context="request">
+            <MudTd DataLabel="Mod">
+                <MudLink Href="@WorkshopUrl(request.Mod!.WorkshopId)" Target="_blank">@request.Title</MudLink>
+                @if (request.Mod!.Title is { Length: > 0 } workshopTitle
+                     && !string.Equals(workshopTitle, request.Title, StringComparison.OrdinalIgnoreCase))
                 {
-                    <tr>
-                        <td>@request.Title</td>
-                        <td>@request.Mod!.Game</td>
-                        <td><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=@request.Mod!.WorkshopId" target="_blank" rel="noopener noreferrer">@request.Mod!.WorkshopId</a></td>
-                        <td>@request.RequesterName</td>
-                        <td><span class="badge @StatusBadgeClass(request.Status)">@request.Status</span></td>
-                        <td>
-                            <span class="badge @FetchStatusBadgeClass(request.Mod!.FetchStatus)">@request.Mod!.FetchStatus</span>
-                            @if (request.Mod!.PzModIds.Count > 0)
-                            {
-                                <div class="small text-muted">@string.Join(", ", request.Mod!.PzModIds.Select(m => m.Value))</div>
-                            }
-                        </td>
-                        <td>@request.CreatedAtUtc.ToLocalTime().ToString("g")</td>
-                    </tr>
+                    <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@workshopTitle</MudText>
                 }
-            </tbody>
-        </table>
-    </div>
+            </MudTd>
+            <MudTd DataLabel="Requested by">@request.RequesterName</MudTd>
+            <MudTd DataLabel="Reason">
+                <MudText Typo="Typo.body2">@request.Reason</MudText>
+            </MudTd>
+            <MudTd DataLabel="Mod ID">
+                @if (request.Mod!.PzModIds.Count > 0)
+                {
+                    <MudText Typo="Typo.body2" Class="font-monospace">
+                        @string.Join(", ", request.Mod!.PzModIds.Select(m => m.Value))
+                    </MudText>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@FetchColor(request.Mod!.FetchStatus)">
+                        @request.Mod!.FetchStatus
+                    </MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Submitted">
+                <MudText Typo="Typo.caption">@request.CreatedAtUtc.ToLocalTime().ToString("g")</MudText>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
 }
 
 @code {
@@ -98,8 +143,11 @@ else
 
     private string _title = string.Empty;
     private string _workshopInput = string.Empty;
-    private List<ModRequest>? _requests;
+    private string _reason = string.Empty;
+    private string? _requesterName;
+    private List<ModRequest>? _pendingRequests;
     private List<string> _nameSuggestions = [];
+    private List<ModRequestService.ExistingRequestInfo> _existingRequests = [];
     private CancellationTokenSource? _pollCts;
 
     protected override async Task OnInitializedAsync()
@@ -111,8 +159,13 @@ else
 
     private async Task RefreshAsync()
     {
-        _requests = await ModRequestService.GetRequestsAsync();
+        _pendingRequests = await ModRequestService.GetRequestsAsync(RequestStatus.Pending);
         _nameSuggestions = await ModRequestService.GetDistinctRequesterNamesAsync();
+    }
+
+    private async Task CheckForDuplicateAsync()
+    {
+        _existingRequests = await ModRequestService.FindExistingRequestsAsync(_workshopInput);
     }
 
     private async Task PollWhilePendingAsync(CancellationToken token)
@@ -120,7 +173,8 @@ else
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(4));
         while (await timer.WaitForNextTickAsync(token))
         {
-            if (_requests is null || _requests.All(r => r.Mod!.FetchStatus is ModIdFetchStatus.Completed or ModIdFetchStatus.Failed))
+            if (_pendingRequests is null
+                || _pendingRequests.All(r => r.Mod!.FetchStatus is ModIdFetchStatus.Completed or ModIdFetchStatus.Failed))
             {
                 continue;
             }
@@ -130,20 +184,23 @@ else
         }
     }
 
-    private static string StatusBadgeClass(RequestStatus status) => status switch
+    private static string WorkshopUrl(string workshopId) =>
+        $"https://steamcommunity.com/sharedfiles/filedetails/?id={workshopId}";
+
+    private static Color StatusColor(RequestStatus status) => status switch
     {
-        RequestStatus.Approved => "bg-success",
-        RequestStatus.Backlogged => "bg-warning text-dark",
-        RequestStatus.Declined => "bg-danger",
-        _ => "bg-secondary"
+        RequestStatus.Approved => Color.Success,
+        RequestStatus.Backlogged => Color.Warning,
+        RequestStatus.Declined => Color.Error,
+        _ => Color.Default
     };
 
-    private static string FetchStatusBadgeClass(ModIdFetchStatus status) => status switch
+    private static Color FetchColor(ModIdFetchStatus status) => status switch
     {
-        ModIdFetchStatus.Completed => "bg-success",
-        ModIdFetchStatus.Processing => "bg-info text-dark",
-        ModIdFetchStatus.Failed => "bg-danger",
-        _ => "bg-secondary"
+        ModIdFetchStatus.Completed => Color.Success,
+        ModIdFetchStatus.Processing => Color.Info,
+        ModIdFetchStatus.Failed => Color.Error,
+        _ => Color.Default
     };
 
     public async ValueTask DisposeAsync()

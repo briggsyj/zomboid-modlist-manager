@@ -15,6 +15,9 @@ public class Mod
     /// <summary>Parsed numeric Steam Workshop published file ID.</summary>
     public required string WorkshopId { get; set; }
 
+    /// <summary>The item's real title on the Steam Workshop, resolved during the mod ID fetch.</summary>
+    public string? Title { get; set; }
+
     public ModIdFetchStatus FetchStatus { get; set; } = ModIdFetchStatus.Queued;
 
     /// <summary>Diagnostic output from the last SteamCMD fetch attempt (stdout/stderr tail, error message, etc).</summary>

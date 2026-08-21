@@ -1,4 +1,6 @@
-﻿<!DOCTYPE html>
+@* Fonts are deliberately NOT pulled from Google Fonts: the app is meant to run on a LAN/offline
+   server, so MudBlazor falls back to the system UI font stack instead of blocking on a CDN. *@
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -6,7 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
     <ResourcePreloader />
-    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["ModlistManager.styles.css"]" />
     <ImportMap />
@@ -18,6 +20,7 @@
     <Routes />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
 </body>
 
 </html>

@@ -2,8 +2,8 @@ using System.Threading.Channels;
 
 namespace ModlistManager.Services;
 
-/// <summary>In-process queue of Mod IDs awaiting a SteamCMD mod.info fetch.</summary>
-public class SteamCmdFetchQueue
+/// <summary>In-process queue of Mod IDs awaiting a Project Zomboid Mod ID lookup.</summary>
+public class ModIdFetchQueue
 {
     private readonly Channel<int> _channel = Channel.CreateUnbounded<int>();
 

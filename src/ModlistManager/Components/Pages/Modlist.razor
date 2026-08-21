@@ -1,0 +1,153 @@
+@page "/modlist"
+@rendermode InteractiveServer
+@using ModlistManager.Data.Entities
+@using ModlistManager.Services
+@inject ModRequestService ModRequestService
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* Public: anyone can see which mods made it onto the server. Only admins get the export buttons,
+   since those are for pasting into server config. *@
+
+<PageTitle>Modlist</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">Modlist</MudText>
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Mods approved for the server. Want something added? <MudLink Href="">Make a request</MudLink>.
+</MudText>
+
+<MudSelect T="string" Value="_selectedGame" ValueChanged="OnGameChangedAsync" Label="Game"
+           Variant="Variant.Outlined" Dense="true" Class="mb-4" Style="max-width: 22rem;">
+    @foreach (var game in _games)
+    {
+        <MudSelectItem T="string" Value="@game">@game</MudSelectItem>
+    }
+</MudSelect>
+
+<AuthorizeView>
+    <Authorized>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-4 flex-wrap">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CopyWorkshopIdsAsync">
+                Copy Workshop IDs
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CopyZomboidModIdsAsync">
+                Copy Zomboid Mod IDs
+            </MudButton>
+            @if (_copiedMessage is not null)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Success">@_copiedMessage</MudText>
+            }
+        </MudStack>
+    </Authorized>
+</AuthorizeView>
+
+@if (_mods is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_mods.Count == 0)
+{
+    <MudAlert Severity="Severity.Normal" Dense="true">No mods on the @_selectedGame modlist yet.</MudAlert>
+}
+else
+{
+    <MudTable Items="_mods" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Mod</MudTh>
+            <MudTh>Mod ID</MudTh>
+            <MudTh>Requested by</MudTh>
+            <MudTh>Added</MudTh>
+        </HeaderContent>
+        <RowTemplate Context="mod">
+            <MudTd DataLabel="Mod">
+                <MudLink Href="@WorkshopUrl(mod.WorkshopId)" Target="_blank">
+                    @(mod.Title is { Length: > 0 } title ? title : mod.WorkshopId)
+                </MudLink>
+                <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@mod.WorkshopId</MudText>
+            </MudTd>
+            <MudTd DataLabel="Mod ID">
+                <MudText Typo="Typo.body2" Class="font-monospace">
+                    @string.Join(", ", mod.PzModIds.Select(m => m.Value))
+                </MudText>
+            </MudTd>
+            <MudTd DataLabel="Requested by">
+                @string.Join(", ", mod.Requests.Select(r => r.RequesterName).Distinct())
+            </MudTd>
+            <MudTd DataLabel="Added">
+                <MudText Typo="Typo.caption">@(mod.AddedToModlistAtUtc?.ToLocalTime().ToString("g"))</MudText>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private List<string> _games = [Mod.DefaultGame];
+    private string _selectedGame = Mod.DefaultGame;
+    private List<Mod>? _mods;
+    private string? _copiedMessage;
+    private IJSObjectReference? _clipboardModule;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var distinctGames = await ModRequestService.GetDistinctGamesAsync();
+        if (distinctGames.Count > 0)
+        {
+            _games = distinctGames;
+            if (!_games.Contains(_selectedGame))
+            {
+                _selectedGame = _games[0];
+            }
+        }
+
+        await RefreshAsync();
+    }
+
+    private async Task<IJSObjectReference> GetClipboardModuleAsync() =>
+        _clipboardModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/clipboard.js");
+
+    private async Task RefreshAsync() => _mods = await ModRequestService.GetModlistAsync(_selectedGame);
+
+    private async Task OnGameChangedAsync(string? game)
+    {
+        _selectedGame = game ?? Mod.DefaultGame;
+        _copiedMessage = null;
+        await RefreshAsync();
+    }
+
+    private async Task CopyWorkshopIdsAsync()
+    {
+        var ids = await ModRequestService.BuildApprovedWorkshopIdExportAsync();
+        await CopyAsync(ids, "No mods on the modlist to copy.");
+    }
+
+    private async Task CopyZomboidModIdsAsync()
+    {
+        var ids = await ModRequestService.BuildApprovedZomboidModIdExportAsync();
+        await CopyAsync(ids, "No approved Zomboid mod IDs to copy.");
+    }
+
+    private async Task CopyAsync(string payload, string emptyMessage)
+    {
+        var module = await GetClipboardModuleAsync();
+        await module.InvokeVoidAsync("copyToClipboard", payload);
+        _copiedMessage = string.IsNullOrEmpty(payload) ? emptyMessage : "Copied!";
+    }
+
+    private static string WorkshopUrl(string workshopId) =>
+        $"https://steamcommunity.com/sharedfiles/filedetails/?id={workshopId}";
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_clipboardModule is not null)
+        {
+            try
+            {
+                await _clipboardModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The circuit is already gone; nothing to dispose on the client.
+            }
+        }
+    }
+}

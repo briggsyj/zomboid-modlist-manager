@@ -1,45 +1,19 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">ModlistManager</a>
-    </div>
-</div>
+@* Rendered inside the MudAppBar. The logout action stays a real form POST because signing out
+   needs HttpContext, which an interactive circuit can't touch after the initial response. *@
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+<MudButton Href="" Variant="Variant.Text" Color="Color.Inherit">Requests</MudButton>
+<MudButton Href="modlist" Variant="Variant.Text" Color="Color.Inherit">Modlist</MudButton>
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Requests
-            </NavLink>
-        </div>
+<MudSpacer />
 
-        <AuthorizeView>
-            <Authorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="admin">
-                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Admin
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="admin/approved">
-                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Approved Mods
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <form method="post" action="/account/logout">
-                        <button type="submit" class="nav-link btn btn-link">Log out</button>
-                    </form>
-                </div>
-            </Authorized>
-            <NotAuthorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="login">
-                        <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Admin Login
-                    </NavLink>
-                </div>
-            </NotAuthorized>
-        </AuthorizeView>
-    </nav>
-</div>
-
+<AuthorizeView>
+    <Authorized>
+        <MudButton Href="admin" Variant="Variant.Text" Color="Color.Inherit">Admin</MudButton>
+        <form method="post" action="/account/logout" class="d-inline">
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Text" Color="Color.Inherit">Log out</MudButton>
+        </form>
+    </Authorized>
+    <NotAuthorized>
+        <MudButton Href="login" Variant="Variant.Text" Color="Color.Inherit">Admin login</MudButton>
+    </NotAuthorized>
+</AuthorizeView>

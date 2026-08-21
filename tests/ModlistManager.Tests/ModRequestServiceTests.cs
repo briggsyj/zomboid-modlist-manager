@@ -11,7 +11,7 @@ public class ModRequestServiceTests : IDisposable
 
     public ModRequestServiceTests()
     {
-        _service = new ModRequestService(_dbFactory, new SteamCmdFetchQueue());
+        _service = new ModRequestService(_dbFactory, new ModIdFetchQueue());
     }
 
     private async Task<ModRequest> GetRequestAsync(int requestId) =>

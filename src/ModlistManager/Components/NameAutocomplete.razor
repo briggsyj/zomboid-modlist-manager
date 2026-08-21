@@ -1,37 +1,40 @@
 @* Free-text input with as-you-type suggestions drawn from existing requester names.
-   No JS interop: the dropdown-item mousedown handler calls preventDefault so the input never
-   blurs before the click is processed, avoiding the classic autocomplete blur race. *@
+
+   Deliberately not MudAutocomplete: the suggestion list must never block a plain form POST, so the
+   underlying element stays a real named input, and the dropdown items use onmousedown with
+   preventDefault so the input doesn't blur before the click registers. *@
 
 <div class="name-autocomplete">
-    <input type="text"
-           id="@Id"
-           name="@Name"
-           class="form-control"
-           value="@Value"
-           placeholder="@Placeholder"
-           autocomplete="off"
-           @oninput="OnInput"
-           @onfocus="OnFocus"
-           @onblur="() => _showDropdown = false" />
+    <MudTextField T="string"
+                  Value="@Value"
+                  ValueChanged="OnValueChangedAsync"
+                  Immediate="true"
+                  Label="@Label"
+                  Placeholder="@Placeholder"
+                  Variant="Variant.Outlined"
+                  OnBlur="@(() => _showSuggestions = false)"
+                  name="@Name"
+                  id="@Id"
+                  autocomplete="off" />
 
-    @if (_showDropdown && _filtered.Count > 0)
+    @if (_showSuggestions && _filtered.Count > 0)
     {
-        <ul class="list-group name-autocomplete-list">
+        <MudPaper Elevation="4" Class="name-autocomplete-list">
             @foreach (var suggestion in _filtered)
             {
-                <li class="list-group-item list-group-item-action"
-                    @onmousedown="() => SelectSuggestion(suggestion)"
-                    @onmousedown:preventDefault="true">
+                <div class="name-autocomplete-item"
+                     @onmousedown="() => SelectSuggestionAsync(suggestion)"
+                     @onmousedown:preventDefault="true">
                     @suggestion
-                </li>
+                </div>
             }
-        </ul>
+        </MudPaper>
     }
 </div>
 
 @code {
     private List<string> _filtered = [];
-    private bool _showDropdown;
+    private bool _showSuggestions;
 
     [Parameter]
     public string? Value { get; set; }
@@ -42,7 +45,7 @@
     [Parameter]
     public IReadOnlyList<string> Suggestions { get; set; } = [];
 
-    /// <summary>The "name" attribute on the underlying input, so it's included in a native (non-Blazor) form POST.</summary>
+    /// <summary>The "name" attribute on the underlying input, so it's included in a native form POST.</summary>
     [Parameter]
     public string? Name { get; set; }
 
@@ -50,34 +53,34 @@
     public string? Id { get; set; }
 
     [Parameter]
+    public string? Label { get; set; }
+
+    [Parameter]
     public string? Placeholder { get; set; }
 
-    private async Task OnInput(ChangeEventArgs e)
+    private async Task OnValueChangedAsync(string? value)
     {
-        Value = e.Value?.ToString();
+        Value = value;
         await ValueChanged.InvokeAsync(Value);
         Filter();
-        _showDropdown = true;
+        _showSuggestions = true;
     }
 
-    private void OnFocus()
-    {
-        Filter();
-        _showDropdown = true;
-    }
-
-    private async Task SelectSuggestion(string suggestion)
+    private async Task SelectSuggestionAsync(string suggestion)
     {
         Value = suggestion;
         await ValueChanged.InvokeAsync(Value);
-        _showDropdown = false;
+        _showSuggestions = false;
     }
 
     private void Filter()
     {
-        var input = Value?.Trim().ToLowerInvariant() ?? string.Empty;
-        _filtered = input.Length == 0
-            ? Suggestions.Take(8).ToList()
-            : Suggestions.Where(s => s.Contains(input, StringComparison.OrdinalIgnoreCase)).Take(8).ToList();
+        var input = Value?.Trim() ?? string.Empty;
+        _filtered = (input.Length == 0
+                ? Suggestions
+                : Suggestions.Where(s => s.Contains(input, StringComparison.OrdinalIgnoreCase)))
+            .Where(s => !string.Equals(s, input, StringComparison.OrdinalIgnoreCase))
+            .Take(8)
+            .ToList();
     }
 }

@@ -1,23 +1,28 @@
 @page "/login"
-@* Deliberately static (no @rendermode): a plain HTML form POSTs straight to the /login
+@* Deliberately static (no @rendermode): a plain HTML form POSTs straight to the /account/login
    minimal API endpoint, which is the only place that can call HttpContext.SignInAsync. *@
 
 <PageTitle>Admin Login</PageTitle>
 
-<h1>Admin Login</h1>
+<MudText Typo="Typo.h4" GutterBottom="true">Admin Login</MudText>
 
-@if (Error is not null)
-{
-    <div class="alert alert-danger">Incorrect password.</div>
-}
+<MudCard Elevation="2" Style="max-width: 26rem;">
+    <MudCardContent>
+        @if (Error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">Incorrect password.</MudAlert>
+        }
 
-<form method="post" action="/account/login" class="col-md-4">
-    <div class="mb-3">
-        <label class="form-label" for="password">Password</label>
-        <input id="password" name="password" type="password" class="form-control" required autofocus />
-    </div>
-    <button type="submit" class="btn btn-primary">Log in</button>
-</form>
+        <form method="post" action="/account/login">
+            <MudTextField T="string" Label="Password" InputType="InputType.Password"
+                          Variant="Variant.Outlined" Class="mb-4"
+                          name="password" id="password" Required="true" />
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">
+                Log in
+            </MudButton>
+        </form>
+    </MudCardContent>
+</MudCard>
 
 @code {
     [SupplyParameterFromQuery(Name = "error")]

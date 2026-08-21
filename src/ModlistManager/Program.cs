@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using ModlistManager.Components;
 using ModlistManager.Data;
 using ModlistManager.Services;
+using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,10 +25,16 @@ if (!string.IsNullOrWhiteSpace(dataProtectionKeyPath))
 
 // App services
 builder.Services.Configure<SteamCmdOptions>(builder.Configuration.GetSection(SteamCmdOptions.SectionName));
-builder.Services.AddSingleton<SteamCmdFetchQueue>();
-builder.Services.AddHostedService<SteamCmdFetchService>();
+builder.Services.AddSingleton<ModIdFetchQueue>();
+builder.Services.AddHostedService<ModIdFetchService>();
+builder.Services.AddSingleton<SteamCmdModInfoReader>();
 builder.Services.AddSingleton<ModRequestService>();
 builder.Services.AddSingleton<AdminAuthService>();
+builder.Services.AddSingleton<SteamWorkshopApiClient>();
+builder.Services.AddHttpClient(SteamWorkshopApiClient.HttpClientName, client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(20);
+});
 
 // Auth: single admin account behind a cookie, no self-registration.
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -40,6 +47,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     });
 builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
+
+builder.Services.AddMudServices();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -116,7 +125,8 @@ app.MapPost("/account/logout", async (HttpContext ctx) =>
 app.MapPost("/requests", async (HttpContext ctx, ModRequestService requestService) =>
 {
     var form = await ctx.Request.ReadFormAsync();
-    var result = await requestService.CreateRequestAsync(form["title"], form["workshopInput"], form["requesterName"]);
+    var result = await requestService.CreateRequestAsync(
+        form["title"], form["workshopInput"], form["requesterName"], form["reason"]);
 
     return result.Success
         ? Results.LocalRedirect("/")

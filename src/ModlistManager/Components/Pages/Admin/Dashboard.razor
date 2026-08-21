@@ -9,95 +9,126 @@
 
 <PageTitle>Admin - Requests</PageTitle>
 
-<h1>Admin</h1>
+<MudText Typo="Typo.h4" GutterBottom="true">Admin</MudText>
 
-<div class="btn-group mb-3" role="group">
+<MudChipSet T="RequestStatus?" SelectedValue="_filter" SelectedValueChanged="SetFilterAsync"
+            SelectionMode="SelectionMode.SingleSelection" Class="mb-4">
     @foreach (var option in _filterOptions)
     {
-        <button type="button" class="btn @(option == _filter ? "btn-primary" : "btn-outline-primary")"
-                @onclick="() => SetFilterAsync(option)">
+        <MudChip T="RequestStatus?" Value="@option" Color="Color.Primary" Variant="Variant.Outlined">
             @(option?.ToString() ?? "All")
-        </button>
+        </MudChip>
     }
-</div>
+</MudChipSet>
 
 @if (_requests is null)
 {
-    <p><em>Loading...</em></p>
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
 }
 else if (_requests.Count == 0)
 {
-    <p><em>No requests in this view.</em></p>
+    <MudAlert Severity="Severity.Normal" Dense="true">No requests in this view.</MudAlert>
 }
 else
 {
-    <div class="table-responsive">
-        <table class="table align-middle">
-            <thead>
-                <tr>
-                    <th>Title</th>
-                    <th>Game</th>
-                    <th>Workshop item</th>
-                    <th>Requested by</th>
-                    <th>Status</th>
-                    <th>Mod IDs</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var request in _requests)
+    @* Sm, not Md: at Md the table collapses into the stacked mobile layout on ordinary ~1280px
+       laptop screens, which turns each request into a very tall, hard-to-scan card. *@
+    <MudTable Items="_requests" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Mod</MudTh>
+            <MudTh>Requested by</MudTh>
+            <MudTh>Reason</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Mod IDs</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate Context="request">
+            <MudTd DataLabel="Mod">
+                <MudLink Href="@WorkshopUrl(request.Mod!.WorkshopId)" Target="_blank">@request.Title</MudLink>
+                @if (request.Mod!.Title is { Length: > 0 } workshopTitle
+                     && !string.Equals(workshopTitle, request.Title, StringComparison.OrdinalIgnoreCase))
                 {
-                    var mod = request.Mod!;
-                    <tr>
-                        <td>@request.Title</td>
-                        <td>@mod.Game</td>
-                        <td><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=@mod.WorkshopId" target="_blank" rel="noopener noreferrer">@mod.WorkshopId</a></td>
-                        <td>@request.RequesterName</td>
-                        <td><span class="badge @StatusBadgeClass(request.Status)">@request.Status</span></td>
-                        <td style="min-width: 16rem;">
-                            <span class="badge @FetchStatusBadgeClass(mod.FetchStatus)">@mod.FetchStatus</span>
-                            @if (mod.IsInModlist)
-                            {
-                                <span class="badge bg-primary">on modlist</span>
-                            }
-                            @if (!string.IsNullOrWhiteSpace(mod.FetchLog))
-                            {
-                                <div class="small text-muted" style="white-space: pre-wrap;">@mod.FetchLog</div>
-                            }
-                            <ul class="list-unstyled mb-1 mt-1">
-                                @foreach (var modId in mod.PzModIds)
-                                {
-                                    <li>
-                                        <code>@modId.Value</code>
-                                        @if (!string.IsNullOrWhiteSpace(modId.Name)) { <span class="text-muted"> (@modId.Name)</span> }
-                                        @if (modId.IsManual) { <span class="badge bg-secondary">manual</span> }
-                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1" @onclick="() => DeletePzModIdAsync(modId.Id)">remove</button>
-                                    </li>
-                                }
-                            </ul>
-                            <div class="input-group input-group-sm">
-                                <input class="form-control" placeholder="Add mod ID" @bind="_pendingModId[mod.Id]" @bind:event="oninput" />
-                                <button class="btn btn-outline-secondary" type="button" @onclick="() => AddManualModIdAsync(mod.Id)">Add</button>
-                            </div>
-                            @if (mod.FetchStatus == ModIdFetchStatus.Failed)
-                            {
-                                <button type="button" class="btn btn-sm btn-outline-warning mt-1" @onclick="() => RetryFetchAsync(mod.Id)">Retry fetch</button>
-                            }
-                        </td>
-                        <td class="text-nowrap">
-                            <button type="button" class="btn btn-sm btn-success" @onclick="() => SetStatusAsync(request.Id, RequestStatus.Approved)">Approve</button>
-                            <button type="button" class="btn btn-sm btn-warning" @onclick="() => SetStatusAsync(request.Id, RequestStatus.Backlogged)">Backlog</button>
-                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => SetStatusAsync(request.Id, RequestStatus.Declined)">Decline</button>
-                        </td>
-                    </tr>
+                    <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@workshopTitle</MudText>
                 }
-            </tbody>
-        </table>
-    </div>
+                <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@request.Mod!.Game</MudText>
+            </MudTd>
+
+            <MudTd DataLabel="Requested by">@request.RequesterName</MudTd>
+
+            <MudTd DataLabel="Reason">
+                <MudText Typo="Typo.body2">@request.Reason</MudText>
+            </MudTd>
+
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Size="Size.Small" Color="@StatusColor(request.Status)">@request.Status</MudChip>
+                @if (request.Mod!.IsInModlist)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info">on modlist</MudChip>
+                }
+            </MudTd>
+
+            <MudTd DataLabel="Mod IDs" Style="min-width: 18rem;">
+                @{
+                    var mod = request.Mod!;
+                }
+                <MudChip T="string" Size="Size.Small" Color="@FetchColor(mod.FetchStatus)">@mod.FetchStatus</MudChip>
+
+                @foreach (var modId in mod.PzModIds)
+                {
+                    <div class="d-flex align-center gap-1 mt-1">
+                        <MudText Typo="Typo.body2" Class="font-monospace">@modId.Value</MudText>
+                        @if (modId.IsManual)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">manual</MudChip>
+                        }
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                                       OnClick="() => DeletePzModIdAsync(modId.Id)" aria-label="Remove mod ID" />
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(mod.FetchLog))
+                {
+                    <MudText Typo="Typo.caption" Class="d-block mud-text-secondary mt-1"
+                             Style="white-space: pre-wrap;">@mod.FetchLog</MudText>
+                }
+
+                <div class="d-flex align-center gap-2 mt-2">
+                    <MudTextField T="string" Value="@GetPending(mod.Id)"
+                                  ValueChanged="@(v => _pendingModId[mod.Id] = v ?? string.Empty)"
+                                  Immediate="true" Label="Add mod ID" Variant="Variant.Outlined"
+                                  Margin="Margin.Dense" />
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                               OnClick="() => AddManualModIdAsync(mod.Id)">Add</MudButton>
+                </div>
+
+                @if (mod.FetchStatus == ModIdFetchStatus.Failed)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" Class="mt-1"
+                               OnClick="() => RetryFetchAsync(mod.Id)">Retry fetch</MudButton>
+                }
+            </MudTd>
+
+            <MudTd DataLabel="Actions">
+                <MudStack Row="false" Spacing="1" Style="min-width: 7rem;">
+                    <MudButton Size="Size.Small" Variant="@ActionVariant(request.Status, RequestStatus.Approved)"
+                               Color="Color.Success" FullWidth="true"
+                               OnClick="() => SetStatusAsync(request.Id, RequestStatus.Approved)">Approve</MudButton>
+                    <MudButton Size="Size.Small" Variant="@ActionVariant(request.Status, RequestStatus.Backlogged)"
+                               Color="Color.Warning" FullWidth="true"
+                               OnClick="() => SetStatusAsync(request.Id, RequestStatus.Backlogged)">Backlog</MudButton>
+                    <MudButton Size="Size.Small" Variant="@ActionVariant(request.Status, RequestStatus.Declined)"
+                               Color="Color.Error" FullWidth="true"
+                               OnClick="() => SetStatusAsync(request.Id, RequestStatus.Declined)">Decline</MudButton>
+                </MudStack>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
 }
 
 @code {
-    private readonly RequestStatus?[] _filterOptions = [RequestStatus.Pending, RequestStatus.Backlogged, RequestStatus.Approved, RequestStatus.Declined, null];
+    private readonly RequestStatus?[] _filterOptions =
+        [RequestStatus.Pending, RequestStatus.Backlogged, RequestStatus.Approved, RequestStatus.Declined, null];
+
     private RequestStatus? _filter = RequestStatus.Pending;
     private List<ModRequest>? _requests;
     private readonly Dictionary<int, string> _pendingModId = new();
@@ -119,27 +150,23 @@ else
         }
     }
 
+    private string GetPending(int modId) => _pendingModId.TryGetValue(modId, out var v) ? v : string.Empty;
+
+    // Fetches run in the background, so keep refreshing while any are still in flight - otherwise
+    // "Retry fetch" looks like it did nothing until the page is manually reloaded.
     private async Task PollWhilePendingAsync(CancellationToken token)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(4));
         while (await timer.WaitForNextTickAsync(token))
         {
-            if (_requests is null || _requests.All(r => r.Mod!.FetchStatus is ModIdFetchStatus.Completed or ModIdFetchStatus.Failed))
+            if (_requests is null
+                || _requests.All(r => r.Mod!.FetchStatus is ModIdFetchStatus.Completed or ModIdFetchStatus.Failed))
             {
                 continue;
             }
 
             await RefreshAsync();
             await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_pollCts is not null)
-        {
-            await _pollCts.CancelAsync();
-            _pollCts.Dispose();
         }
     }
 
@@ -179,19 +206,35 @@ else
         await RefreshAsync();
     }
 
-    private static string StatusBadgeClass(RequestStatus status) => status switch
+    private static string WorkshopUrl(string workshopId) =>
+        $"https://steamcommunity.com/sharedfiles/filedetails/?id={workshopId}";
+
+    /// <summary>The action matching the request's current status is filled in, so the state is obvious at a glance.</summary>
+    private static Variant ActionVariant(RequestStatus current, RequestStatus action) =>
+        current == action ? Variant.Filled : Variant.Outlined;
+
+    private static Color StatusColor(RequestStatus status) => status switch
     {
-        RequestStatus.Approved => "bg-success",
-        RequestStatus.Backlogged => "bg-warning text-dark",
-        RequestStatus.Declined => "bg-danger",
-        _ => "bg-secondary"
+        RequestStatus.Approved => Color.Success,
+        RequestStatus.Backlogged => Color.Warning,
+        RequestStatus.Declined => Color.Error,
+        _ => Color.Default
     };
 
-    private static string FetchStatusBadgeClass(ModIdFetchStatus status) => status switch
+    private static Color FetchColor(ModIdFetchStatus status) => status switch
     {
-        ModIdFetchStatus.Completed => "bg-success",
-        ModIdFetchStatus.Processing => "bg-info text-dark",
-        ModIdFetchStatus.Failed => "bg-danger",
-        _ => "bg-secondary"
+        ModIdFetchStatus.Completed => Color.Success,
+        ModIdFetchStatus.Processing => Color.Info,
+        ModIdFetchStatus.Failed => Color.Error,
+        _ => Color.Default
     };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_pollCts is not null)
+        {
+            await _pollCts.CancelAsync();
+            _pollCts.Dispose();
+        }
+    }
 }

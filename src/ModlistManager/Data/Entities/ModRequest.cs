@@ -13,6 +13,9 @@ public class ModRequest
     /// <summary>Lowercase-normalized requester name.</summary>
     public required string RequesterName { get; set; }
 
+    /// <summary>Why the requester thinks the server needs this mod. Optional.</summary>
+    public string? Reason { get; set; }
+
     public RequestStatus Status { get; set; } = RequestStatus.Pending;
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;

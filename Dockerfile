@@ -13,16 +13,26 @@ RUN dotnet publish ModlistManager/ModlistManager.csproj -c Release -o /app/publi
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 
-# SteamCMD is x86/i386-only, so this image must run as linux/amd64 (see docker-compose.yml).
-# Installed from Valve's tarball (not the apt package) to avoid an interactive EULA prompt.
-RUN dpkg --add-architecture i386 \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl lib32gcc-s1 lib32stdc++6 \
-    && mkdir -p /opt/steamcmd \
-    && curl -sSL "https://media.steampowered.com/installer/steamcmd_linux.tar.gz" | tar -xz -C /opt/steamcmd \
-    && apt-get purge -y curl \
-    && apt-get autoremove -y \
+# Mod IDs are read from the Steam Workshop API over HTTPS, so the trust store must be present.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# SteamCMD is an optional extra, off by default: it only ships a 32-bit x86 binary, so it cannot
+# execute on an arm64 host emulating amd64 (Docker on Apple Silicon), and it downloads an entire
+# mod just to read one mod.info file. Build with --build-arg INSTALL_STEAMCMD=true and run with
+# SteamCmd__Enabled=true on a real amd64 host to use it as the authoritative Mod ID source.
+ARG INSTALL_STEAMCMD=false
+RUN if [ "$INSTALL_STEAMCMD" = "true" ]; then \
+        dpkg --add-architecture i386 \
+        && apt-get update \
+        && apt-get install -y --no-install-recommends curl lib32gcc-s1 lib32stdc++6 \
+        && mkdir -p /opt/steamcmd \
+        && curl -sSL "https://media.steampowered.com/installer/steamcmd_linux.tar.gz" | tar -xz -C /opt/steamcmd \
+        && apt-get purge -y curl \
+        && apt-get autoremove -y \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 ENV SteamCmd__ExecutablePath=/opt/steamcmd/steamcmd.sh \
     SteamCmd__WorkshopContentRoot=/opt/steamcmd \

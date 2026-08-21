@@ -4,13 +4,19 @@
 
 .name-autocomplete-list {
     position: absolute;
-    z-index: 1000;
+    z-index: 1400;
     width: 100%;
-    max-height: 12rem;
+    max-height: 14rem;
     overflow-y: auto;
-    margin-top: 0.125rem;
+    padding: 0.25rem 0;
 }
 
-.name-autocomplete-list .list-group-item {
+.name-autocomplete-item {
     cursor: pointer;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+}
+
+.name-autocomplete-item:hover {
+    background-color: var(--mud-palette-action-default-hover);
 }

@@ -5,11 +5,15 @@ using ModlistManager.Data.Entities;
 
 namespace ModlistManager.Services;
 
-public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContextFactory, SteamCmdFetchQueue fetchQueue)
+public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContextFactory, ModIdFetchQueue fetchQueue)
 {
     public record CreateResult(bool Success, string? Error, int? RequestId);
 
-    public async Task<CreateResult> CreateRequestAsync(string? title, string? workshopInput, string? requesterName, string game = Mod.DefaultGame)
+    /// <summary>An existing request for the same workshop item, used to warn about duplicates.</summary>
+    public record ExistingRequestInfo(string Title, string RequesterName, RequestStatus Status, string? ModTitle);
+
+    public async Task<CreateResult> CreateRequestAsync(
+        string? title, string? workshopInput, string? requesterName, string? reason = null, string game = Mod.DefaultGame)
     {
         title = title?.Trim();
         if (string.IsNullOrWhiteSpace(title))
@@ -44,6 +48,7 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
             Title = title,
             Mod = mod,
             RequesterName = normalizedName,
+            Reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
             Status = RequestStatus.Pending
         };
         db.ModRequests.Add(request);
@@ -56,6 +61,27 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
         }
 
         return new CreateResult(true, null, request.Id);
+    }
+
+    /// <summary>
+    /// Finds requests already covering the workshop item the given input points at, so the request
+    /// form can warn about duplicates before anything is submitted. Accepts a full workshop URL or a
+    /// bare ID, and returns an empty list when the input isn't a usable workshop reference yet.
+    /// </summary>
+    public async Task<List<ExistingRequestInfo>> FindExistingRequestsAsync(string? workshopInput, string game = Mod.DefaultGame)
+    {
+        var workshopId = WorkshopIdParser.TryParse(workshopInput);
+        if (workshopId is null)
+        {
+            return [];
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        return await db.ModRequests
+            .Where(r => r.Mod!.Game == game && r.Mod.WorkshopId == workshopId)
+            .OrderBy(r => r.CreatedAtUtc)
+            .Select(r => new ExistingRequestInfo(r.Title, r.RequesterName, r.Status, r.Mod!.Title))
+            .ToListAsync();
     }
 
     /// <summary>Lowercases and collapses whitespace so near-duplicate requester names converge.</summary>
