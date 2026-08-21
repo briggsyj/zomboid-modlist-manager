@@ -3,6 +3,7 @@
 @using ModlistManager.Data.Entities
 @using ModlistManager.Services
 @inject ModRequestService ModRequestService
+@inject SteamWorkshopApiClient WorkshopApi
 @implements IAsyncDisposable
 
 <PageTitle>Project Zomboid Mod Requests</PageTitle>
@@ -25,15 +26,31 @@
            creating a request never depends on the interactive circuit having connected. The fields
            are still bound so typing in one (which re-renders this component) doesn't wipe the others. *@
         <form method="post" action="/requests">
-            <MudTextField T="string" @bind-Value="_title" Immediate="true"
-                          Label="Title" Variant="Variant.Outlined" Class="mb-4"
-                          name="title" id="title" />
-
+            @* No title field: the mod's name is taken from the workshop item itself. It's previewed
+               below as soon as a link is entered, so the requester can confirm they pasted the right one. *@
             <MudTextField T="string" @bind-Value="_workshopInput" Immediate="true"
                           Label="Steam Workshop link or item ID" Variant="Variant.Outlined"
                           Placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=3783094058"
-                          OnBlur="CheckForDuplicateAsync"
+                          OnBlur="LookUpWorkshopItemAsync"
                           name="workshopInput" id="workshop" />
+
+            @if (_lookingUp)
+            {
+                <MudText Typo="Typo.body2" Class="mt-2 mud-text-secondary">Looking up mod&hellip;</MudText>
+            }
+            else if (_resolvedTitle is { Length: > 0 } resolved)
+            {
+                <MudAlert Severity="Severity.Success" Dense="true" Class="mt-2" Icon="@Icons.Material.Filled.Check">
+                    @resolved
+                </MudAlert>
+            }
+            else if (_lookupFailed)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                    Couldn't find that item on the Steam Workshop. Double-check the link &mdash; you can still
+                    submit, and an admin will take a look.
+                </MudAlert>
+            }
 
             @if (_existingRequests.Count > 0)
             {
@@ -48,7 +65,7 @@
                     @foreach (var existing in _existingRequests)
                     {
                         <MudText Typo="Typo.body2">
-                            &ldquo;@existing.Title&rdquo; by @existing.RequesterName
+                            Requested by @existing.RequesterName
                             <MudChip T="string" Size="Size.Small" Color="@StatusColor(existing.Status)">@existing.Status</MudChip>
                         </MudText>
                     }
@@ -105,12 +122,7 @@ else
         </HeaderContent>
         <RowTemplate Context="request">
             <MudTd DataLabel="Mod">
-                <MudLink Href="@WorkshopUrl(request.Mod!.WorkshopId)" Target="_blank">@request.Title</MudLink>
-                @if (request.Mod!.Title is { Length: > 0 } workshopTitle
-                     && !string.Equals(workshopTitle, request.Title, StringComparison.OrdinalIgnoreCase))
-                {
-                    <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@workshopTitle</MudText>
-                }
+                <MudLink Href="@WorkshopUrl(request.Mod!.WorkshopId)" Target="_blank">@request.Mod!.DisplayName</MudLink>
             </MudTd>
             <MudTd DataLabel="Requested by">@request.RequesterName</MudTd>
             <MudTd DataLabel="Reason">
@@ -141,10 +153,13 @@ else
     [SupplyParameterFromQuery(Name = "error")]
     public string? Error { get; set; }
 
-    private string _title = string.Empty;
     private string _workshopInput = string.Empty;
     private string _reason = string.Empty;
     private string? _requesterName;
+    private string? _resolvedTitle;
+    private string? _lastLookedUpId;
+    private bool _lookingUp;
+    private bool _lookupFailed;
     private List<ModRequest>? _pendingRequests;
     private List<string> _nameSuggestions = [];
     private List<ModRequestService.ExistingRequestInfo> _existingRequests = [];
@@ -163,9 +178,46 @@ else
         _nameSuggestions = await ModRequestService.GetDistinctRequesterNamesAsync();
     }
 
-    private async Task CheckForDuplicateAsync()
+    /// <summary>
+    /// Resolves the workshop item's title for preview and checks whether it's already been
+    /// requested. Runs on blur rather than per-keystroke so pasting a link is a single lookup.
+    /// </summary>
+    private async Task LookUpWorkshopItemAsync()
     {
+        var workshopId = WorkshopIdParser.TryParse(_workshopInput);
+        if (workshopId is null)
+        {
+            _resolvedTitle = null;
+            _lastLookedUpId = null;
+            _lookupFailed = false;
+            _existingRequests = [];
+            return;
+        }
+
         _existingRequests = await ModRequestService.FindExistingRequestsAsync(_workshopInput);
+
+        // Skip the network round trip if this is the same item we already resolved.
+        if (workshopId == _lastLookedUpId)
+        {
+            return;
+        }
+
+        _lookingUp = true;
+        _resolvedTitle = null;
+        _lookupFailed = false;
+        StateHasChanged();
+
+        try
+        {
+            var item = await WorkshopApi.GetItemAsync(workshopId);
+            _resolvedTitle = item?.Title;
+            _lookupFailed = item is null;
+            _lastLookedUpId = workshopId;
+        }
+        finally
+        {
+            _lookingUp = false;
+        }
     }
 
     private async Task PollWhilePendingAsync(CancellationToken token)

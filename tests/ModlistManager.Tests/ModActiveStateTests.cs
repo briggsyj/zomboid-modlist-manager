@@ -15,9 +15,9 @@ public class ModActiveStateTests : IDisposable
     }
 
     /// <summary>Creates an approved mod with the given PZ Mod ID and returns its Mod id.</summary>
-    private async Task<int> ApproveWithModIdAsync(string title, string workshopId, string pzModId)
+    private async Task<int> ApproveWithModIdAsync(string workshopId, string pzModId)
     {
-        var created = await _service.CreateRequestAsync(title, workshopId, "alice");
+        var created = await _service.CreateRequestAsync(workshopId, "alice");
         await _service.SetStatusAsync(created.RequestId!.Value, RequestStatus.Approved);
 
         var modId = (await _service.GetRequestsAsync()).Single(r => r.Id == created.RequestId).ModId;
@@ -28,7 +28,7 @@ public class ModActiveStateTests : IDisposable
     [Fact]
     public async Task NewModsStartActive()
     {
-        await ApproveWithModIdAsync("A", "111", "AMod");
+        await ApproveWithModIdAsync("111", "AMod");
 
         var mod = Assert.Single(await _service.GetModlistAsync());
         Assert.True(mod.IsActive);
@@ -37,8 +37,8 @@ public class ModActiveStateTests : IDisposable
     [Fact]
     public async Task DeactivatingRemovesTheModIdFromTheZomboidExport()
     {
-        var active = await ApproveWithModIdAsync("Keep", "111", "KeepMod");
-        var inactive = await ApproveWithModIdAsync("Drop", "222", "DropMod");
+        var active = await ApproveWithModIdAsync("111", "KeepMod");
+        var inactive = await ApproveWithModIdAsync("222", "DropMod");
 
         await _service.SetModActiveAsync(inactive, false);
 
@@ -48,8 +48,8 @@ public class ModActiveStateTests : IDisposable
     [Fact]
     public async Task DeactivatingKeepsTheWorkshopIdInTheWorkshopExport()
     {
-        await ApproveWithModIdAsync("Keep", "111", "KeepMod");
-        var inactive = await ApproveWithModIdAsync("Drop", "222", "DropMod");
+        await ApproveWithModIdAsync("111", "KeepMod");
+        var inactive = await ApproveWithModIdAsync("222", "DropMod");
 
         await _service.SetModActiveAsync(inactive, false);
 
@@ -60,7 +60,7 @@ public class ModActiveStateTests : IDisposable
     [Fact]
     public async Task ReactivatingPutsTheModIdBack()
     {
-        var modId = await ApproveWithModIdAsync("Toggle", "111", "ToggleMod");
+        var modId = await ApproveWithModIdAsync("111", "ToggleMod");
 
         await _service.SetModActiveAsync(modId, false);
         Assert.Equal(string.Empty, await _service.BuildApprovedZomboidModIdExportAsync());
@@ -72,7 +72,7 @@ public class ModActiveStateTests : IDisposable
     [Fact]
     public async Task DeactivatingDropsEveryModIdOfAMultiModPack()
     {
-        var modId = await ApproveWithModIdAsync("Pack", "111", "PackPartOne");
+        var modId = await ApproveWithModIdAsync("111", "PackPartOne");
         await _service.AddManualModIdAsync(modId, "PackPartTwo", null);
         Assert.Equal(@"\PackPartOne;\PackPartTwo", await _service.BuildApprovedZomboidModIdExportAsync());
 
@@ -84,7 +84,7 @@ public class ModActiveStateTests : IDisposable
     [Fact]
     public async Task InactiveModsStayVisibleOnTheModlist()
     {
-        var modId = await ApproveWithModIdAsync("Still listed", "111", "StillListed");
+        var modId = await ApproveWithModIdAsync("111", "StillListed");
 
         await _service.SetModActiveAsync(modId, false);
 

@@ -10,17 +10,15 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
     public record CreateResult(bool Success, string? Error, int? RequestId);
 
     /// <summary>An existing request for the same workshop item, used to warn about duplicates.</summary>
-    public record ExistingRequestInfo(string Title, string RequesterName, RequestStatus Status, string? ModTitle);
+    public record ExistingRequestInfo(string RequesterName, RequestStatus Status, string? ModTitle);
 
+    /// <remarks>
+    /// There's deliberately no title parameter: the mod's name comes from the workshop item itself,
+    /// resolved by the background lookup, so two people can't file the same mod under different names.
+    /// </remarks>
     public async Task<CreateResult> CreateRequestAsync(
-        string? title, string? workshopInput, string? requesterName, string? reason = null, string game = Mod.DefaultGame)
+        string? workshopInput, string? requesterName, string? reason = null, string game = Mod.DefaultGame)
     {
-        title = title?.Trim();
-        if (string.IsNullOrWhiteSpace(title))
-        {
-            return new CreateResult(false, "Title is required.", null);
-        }
-
         var workshopId = WorkshopIdParser.TryParse(workshopInput);
         if (workshopId is null)
         {
@@ -45,7 +43,6 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
 
         var request = new ModRequest
         {
-            Title = title,
             Mod = mod,
             RequesterName = normalizedName,
             Reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
@@ -80,7 +77,7 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
         return await db.ModRequests
             .Where(r => r.Mod!.Game == game && r.Mod.WorkshopId == workshopId)
             .OrderBy(r => r.CreatedAtUtc)
-            .Select(r => new ExistingRequestInfo(r.Title, r.RequesterName, r.Status, r.Mod!.Title))
+            .Select(r => new ExistingRequestInfo(r.RequesterName, r.Status, r.Mod!.Title))
             .ToListAsync();
     }
 

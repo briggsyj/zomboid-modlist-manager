@@ -44,12 +44,7 @@ else
         </HeaderContent>
         <RowTemplate Context="request">
             <MudTd DataLabel="Mod">
-                <MudLink Href="@WorkshopUrl(request.Mod!.WorkshopId)" Target="_blank">@request.Title</MudLink>
-                @if (request.Mod!.Title is { Length: > 0 } workshopTitle
-                     && !string.Equals(workshopTitle, request.Title, StringComparison.OrdinalIgnoreCase))
-                {
-                    <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@workshopTitle</MudText>
-                }
+                <MudLink Href="@WorkshopUrl(request.Mod!.WorkshopId)" Target="_blank">@request.Mod!.DisplayName</MudLink>
                 <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@request.Mod!.Game</MudText>
             </MudTd>
 

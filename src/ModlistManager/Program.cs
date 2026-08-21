@@ -126,7 +126,7 @@ app.MapPost("/requests", async (HttpContext ctx, ModRequestService requestServic
 {
     var form = await ctx.Request.ReadFormAsync();
     var result = await requestService.CreateRequestAsync(
-        form["title"], form["workshopInput"], form["requesterName"], form["reason"]);
+        form["workshopInput"], form["requesterName"], form["reason"]);
 
     return result.Success
         ? Results.LocalRedirect("/")

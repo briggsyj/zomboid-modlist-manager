@@ -4,8 +4,6 @@ public class ModRequest
 {
     public int Id { get; set; }
 
-    public required string Title { get; set; }
-
     public int ModId { get; set; }
 
     public Mod? Mod { get; set; }

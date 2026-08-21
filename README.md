@@ -10,9 +10,11 @@ approved set is exported as the two semicolon-delimited lists a PZ server config
 
 ## Features
 
-- **Anyone can submit a mod request** - title, Steam Workshop link or item ID, their name
-  (autocompleted from previously-used names), and an optional reason explaining why the server
-  needs it.
+- **Anyone can submit a mod request** - a Steam Workshop link or item ID, their name (autocompleted
+  from previously-used names), and an optional reason explaining why the server needs it.
+- **Mod names come from the workshop, not the requester.** There's no title field to mistype or
+  disagree on: the name is read from the workshop item and previewed on the form as soon as a link
+  is entered, so you can confirm you pasted the right thing before submitting.
 - **Duplicate detection while you type.** Paste a workshop link or ID and the form immediately tells
   you if that item has been requested before - matching on the parsed workshop ID, so a full URL and
   a bare ID are recognised as the same item. Submitting anyway is allowed; it counts as another vote.

@@ -21,7 +21,7 @@ public class ModRequestServiceTests : IDisposable
     public async Task CreateRequestAsync_NormalizesNameAndParsesWorkshopId()
     {
         var result = await _service.CreateRequestAsync(
-            "Better Sorting", "https://steamcommunity.com/sharedfiles/filedetails/?id=3783094058", "  Jane DOE  ");
+            "https://steamcommunity.com/sharedfiles/filedetails/?id=3783094058", "  Jane DOE  ");
 
         Assert.True(result.Success);
         var requests = await _service.GetRequestsAsync();
@@ -34,7 +34,7 @@ public class ModRequestServiceTests : IDisposable
     [Fact]
     public async Task CreateRequestAsync_FailsWhenWorkshopInputIsInvalid()
     {
-        var result = await _service.CreateRequestAsync("Title", "not a link", "Someone");
+        var result = await _service.CreateRequestAsync("not a link", "Someone");
 
         Assert.False(result.Success);
         Assert.NotNull(result.Error);
@@ -42,20 +42,43 @@ public class ModRequestServiceTests : IDisposable
     }
 
     [Theory]
-    [InlineData("", "3783094058", "Someone")]
-    [InlineData("Title", "3783094058", "")]
-    public async Task CreateRequestAsync_FailsWhenRequiredFieldsMissing(string title, string workshop, string name)
+    [InlineData("3783094058", "")]
+    [InlineData("3783094058", "   ")]
+    [InlineData("", "Someone")]
+    public async Task CreateRequestAsync_FailsWhenRequiredFieldsMissing(string workshop, string name)
     {
-        var result = await _service.CreateRequestAsync(title, workshop, name);
+        var result = await _service.CreateRequestAsync(workshop, name);
 
         Assert.False(result.Success);
     }
 
     [Fact]
+    public async Task CreateRequestAsync_DoesNotRequireATitle()
+    {
+        // The name comes from the workshop item, so a request only needs a link and a requester.
+        var result = await _service.CreateRequestAsync("3783094058", "Alice");
+
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task ModDisplayNameFallsBackToTheWorkshopIdUntilTheTitleResolves()
+    {
+        await _service.CreateRequestAsync("3783094058", "Alice");
+
+        var request = Assert.Single(await _service.GetRequestsAsync());
+        Assert.Null(request.Mod!.Title);
+        Assert.Equal("Workshop item 3783094058", request.Mod!.DisplayName);
+
+        request.Mod.Title = "Vanilla Outfits Expanded";
+        Assert.Equal("Vanilla Outfits Expanded", request.Mod.DisplayName);
+    }
+
+    [Fact]
     public async Task CreateRequestAsync_ReusesExistingModForSameWorkshopIdAndGame()
     {
-        await _service.CreateRequestAsync("A", "111", "Alice");
-        await _service.CreateRequestAsync("B", "111", "Bob");
+        await _service.CreateRequestAsync("111", "Alice");
+        await _service.CreateRequestAsync("111", "Bob");
 
         var requests = await _service.GetRequestsAsync();
         Assert.Equal(2, requests.Count);
@@ -65,7 +88,7 @@ public class ModRequestServiceTests : IDisposable
     [Fact]
     public async Task SetStatusAsync_UpdatesStatusAndDecidedAt()
     {
-        var created = await _service.CreateRequestAsync("Title", "12345", "Someone");
+        var created = await _service.CreateRequestAsync("12345", "Someone");
 
         await _service.SetStatusAsync(created.RequestId!.Value, RequestStatus.Approved);
 
@@ -77,7 +100,7 @@ public class ModRequestServiceTests : IDisposable
     [Fact]
     public async Task SetStatusAsync_Approved_AddsModToModlist()
     {
-        var created = await _service.CreateRequestAsync("Title", "111", "Alice");
+        var created = await _service.CreateRequestAsync("111", "Alice");
 
         await _service.SetStatusAsync(created.RequestId!.Value, RequestStatus.Approved);
 
@@ -91,8 +114,8 @@ public class ModRequestServiceTests : IDisposable
     [Fact]
     public async Task SetStatusAsync_TwoRequestsForSameMod_ApprovingEitherKeepsOneModlistEntry()
     {
-        var a = await _service.CreateRequestAsync("A", "111", "Alice");
-        var b = await _service.CreateRequestAsync("B", "111", "Bob");
+        var a = await _service.CreateRequestAsync("111", "Alice");
+        var b = await _service.CreateRequestAsync("111", "Bob");
 
         await _service.SetStatusAsync(a.RequestId!.Value, RequestStatus.Approved);
         await _service.SetStatusAsync(b.RequestId!.Value, RequestStatus.Approved);
@@ -104,7 +127,7 @@ public class ModRequestServiceTests : IDisposable
     [Fact]
     public async Task SetStatusAsync_UnapprovingLastApprovedRequest_RemovesModFromModlist()
     {
-        var created = await _service.CreateRequestAsync("Title", "111", "Alice");
+        var created = await _service.CreateRequestAsync("111", "Alice");
         await _service.SetStatusAsync(created.RequestId!.Value, RequestStatus.Approved);
 
         await _service.SetStatusAsync(created.RequestId!.Value, RequestStatus.Declined);
@@ -115,8 +138,8 @@ public class ModRequestServiceTests : IDisposable
     [Fact]
     public async Task SetStatusAsync_UnapprovingOneOfTwoRequests_KeepsModOnModlist()
     {
-        var a = await _service.CreateRequestAsync("A", "111", "Alice");
-        var b = await _service.CreateRequestAsync("B", "111", "Bob");
+        var a = await _service.CreateRequestAsync("111", "Alice");
+        var b = await _service.CreateRequestAsync("111", "Bob");
         await _service.SetStatusAsync(a.RequestId!.Value, RequestStatus.Approved);
         await _service.SetStatusAsync(b.RequestId!.Value, RequestStatus.Approved);
 
@@ -130,9 +153,9 @@ public class ModRequestServiceTests : IDisposable
     [Fact]
     public async Task BuildApprovedWorkshopIdExportAsync_JoinsOnlyApprovedIdsWithSemicolons()
     {
-        var a = await _service.CreateRequestAsync("A", "111", "Alice");
-        var b = await _service.CreateRequestAsync("B", "222", "Bob");
-        await _service.CreateRequestAsync("C", "333", "Carl"); // left pending
+        var a = await _service.CreateRequestAsync("111", "Alice");
+        var b = await _service.CreateRequestAsync("222", "Bob");
+        await _service.CreateRequestAsync("333", "Carl"); // left pending
 
         await _service.SetStatusAsync(a.RequestId!.Value, RequestStatus.Approved);
         await _service.SetStatusAsync(b.RequestId!.Value, RequestStatus.Approved);
@@ -145,7 +168,7 @@ public class ModRequestServiceTests : IDisposable
     [Fact]
     public async Task BuildApprovedZomboidModIdExportAsync_PrefixesEachIdWithBackslash()
     {
-        var created = await _service.CreateRequestAsync("A", "111", "Alice");
+        var created = await _service.CreateRequestAsync("111", "Alice");
         await _service.SetStatusAsync(created.RequestId!.Value, RequestStatus.Approved);
         var modId = (await GetRequestAsync(created.RequestId!.Value)).ModId;
         await _service.AddManualModIdAsync(modId, "FirstMod", null);
@@ -159,7 +182,7 @@ public class ModRequestServiceTests : IDisposable
     [Fact]
     public async Task BuildApprovedZomboidModIdExportAsync_ExcludesOtherGames()
     {
-        var created = await _service.CreateRequestAsync("A", "111", "Alice", game: "Some Other Game");
+        var created = await _service.CreateRequestAsync("111", "Alice", game: "Some Other Game");
         await _service.SetStatusAsync(created.RequestId!.Value, RequestStatus.Approved);
         var modId = (await GetRequestAsync(created.RequestId!.Value)).ModId;
         await _service.AddManualModIdAsync(modId, "ShouldNotAppear", null);
@@ -172,7 +195,7 @@ public class ModRequestServiceTests : IDisposable
     [Fact]
     public async Task DeletePzModIdAsync_RemovesEntry()
     {
-        var created = await _service.CreateRequestAsync("A", "111", "Alice");
+        var created = await _service.CreateRequestAsync("111", "Alice");
         var modId = (await GetRequestAsync(created.RequestId!.Value)).ModId;
         await _service.AddManualModIdAsync(modId, "SomeMod", null);
         var pzModId = (await GetRequestAsync(created.RequestId!.Value)).Mod!.PzModIds.Single().Id;
@@ -185,9 +208,9 @@ public class ModRequestServiceTests : IDisposable
     [Fact]
     public async Task GetDistinctRequesterNamesAsync_ReturnsNormalizedDistinctSortedNames()
     {
-        await _service.CreateRequestAsync("A", "111", "Bob");
-        await _service.CreateRequestAsync("B", "222", "  BOB  ");
-        await _service.CreateRequestAsync("C", "333", "Alice");
+        await _service.CreateRequestAsync("111", "Bob");
+        await _service.CreateRequestAsync("222", "  BOB  ");
+        await _service.CreateRequestAsync("333", "Alice");
 
         var names = await _service.GetDistinctRequesterNamesAsync();
 

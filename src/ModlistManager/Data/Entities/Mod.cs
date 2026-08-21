@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace ModlistManager.Data.Entities;
 
 /// <summary>
@@ -15,8 +17,15 @@ public class Mod
     /// <summary>Parsed numeric Steam Workshop published file ID.</summary>
     public required string WorkshopId { get; set; }
 
-    /// <summary>The item's real title on the Steam Workshop, resolved during the mod ID fetch.</summary>
+    /// <summary>
+    /// The item's real title on the Steam Workshop, resolved during the mod ID fetch. Null until the
+    /// lookup completes, or if it failed - use <see cref="DisplayName"/> when showing it.
+    /// </summary>
     public string? Title { get; set; }
+
+    /// <summary>The workshop title once known, falling back to the item ID while it isn't.</summary>
+    [NotMapped]
+    public string DisplayName => string.IsNullOrWhiteSpace(Title) ? $"Workshop item {WorkshopId}" : Title;
 
     public ModIdFetchStatus FetchStatus { get; set; } = ModIdFetchStatus.Queued;
 

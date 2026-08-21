@@ -76,9 +76,7 @@ else
                 </Authorized>
             </AuthorizeView>
             <MudTd DataLabel="Mod">
-                <MudLink Href="@WorkshopUrl(mod.WorkshopId)" Target="_blank">
-                    @(mod.Title is { Length: > 0 } title ? title : mod.WorkshopId)
-                </MudLink>
+                <MudLink Href="@WorkshopUrl(mod.WorkshopId)" Target="_blank">@mod.DisplayName</MudLink>
                 <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@mod.WorkshopId</MudText>
             </MudTd>
             <MudTd DataLabel="Mod ID">
