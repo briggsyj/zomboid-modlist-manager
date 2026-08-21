@@ -1,6 +1,11 @@
 # Modlist Manager
 
+[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](LICENSE)
+
 A small .NET 10 Blazor Web App for managing Steam Workshop mod requests for a Project Zomboid server.
+
+Players ask for mods through a simple form; an admin approves, backlogs or declines them; the
+approved set is exported as the two semicolon-delimited lists a PZ server config needs.
 
 ## Features
 
@@ -21,6 +26,8 @@ A small .NET 10 Blazor Web App for managing Steam Workshop mod requests for a Pr
   hand, and retry a failed lookup.
 - **Approving adds the Mod to that game's modlist.** If another request for the same Mod is later
   un-approved, the Mod only leaves the modlist once no approved request references it.
+- **Mods can be parked without being removed.** An admin-only *Active* checkbox on the modlist
+  disables a mod: it stays listed and still downloads, but stops being loaded. See below.
 - Data is stored in SQLite - no external database required.
 
 ### Pages
@@ -28,14 +35,27 @@ A small .NET 10 Blazor Web App for managing Steam Workshop mod requests for a Pr
 | Page | Who can see it |
 | --- | --- |
 | `/` - request form + pending requests | everyone |
-| `/modlist` - approved mods for a game | everyone; the two clipboard-export buttons are admin-only |
+| `/modlist` - approved mods for a game | everyone; the export buttons and *Active* toggle are admin-only |
 | `/login` - admin sign-in | everyone |
 | `/admin` - review queue, Mod ID editing, retry fetch | admin only |
 
-The two export buttons on `/modlist` copy, semicolon-delimited:
+### Exports
 
-- every approved Steam Workshop item ID (all games), for `WorkshopItems=`
-- every approved Project Zomboid Mod ID, each prefixed with `\`, for `Mods=`
+The two buttons on `/modlist` copy a semicolon-delimited list to the clipboard, ready to paste into
+your server config:
+
+| Button | Contents | Server setting |
+| --- | --- | --- |
+| Copy Workshop IDs | every approved Steam Workshop item ID, **active or not** | `WorkshopItems=` |
+| Copy Zomboid Mod IDs | every **active** approved PZ Mod ID, each prefixed with `\` | `Mods=` |
+
+### Active vs inactive
+
+Unticking *Active* on a mod drops its Mod ID from `Mods=` while leaving its workshop ID in
+`WorkshopItems=`. That's how a Project Zomboid server disables a mod: the item is still downloaded,
+it just isn't loaded - so switching it back on needs no re-download and no player-side re-sync.
+
+Mods are active when first approved, and inactive mods stay visible on the modlist.
 
 ## Tech stack
 
@@ -140,3 +160,19 @@ src/ModlistManager/          The Blazor Web App
   Services/                  Request logic, Mod ID fetching, parsers
 tests/ModlistManager.Tests/  Unit/integration tests (xUnit)
 ```
+
+## License
+
+Copyright (C) 2026 John Briggs.
+
+This program is free software; you can redistribute it and/or modify it under the terms of the
+**GNU General Public License, version 2** as published by the Free Software Foundation. The full
+text is in [LICENSE](LICENSE).
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+General Public License for more details.
+
+Third-party dependencies (MudBlazor, EF Core and the rest of the .NET stack) are MIT-licensed and
+GPL-compatible. Project Zomboid and Steam are trademarks of their respective owners; this project is
+not affiliated with either.
