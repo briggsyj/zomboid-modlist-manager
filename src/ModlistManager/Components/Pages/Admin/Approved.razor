@@ -8,9 +8,9 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<PageTitle>Admin - Approved Mods</PageTitle>
+<PageTitle>Admin - Modlist</PageTitle>
 
-<h1>Approved Mods</h1>
+<h1>Modlist</h1>
 
 <div class="mb-3 col-md-4">
     <label class="form-label" for="game">Game</label>
@@ -24,7 +24,7 @@
 
 <div class="mb-4 d-flex gap-2 align-items-center flex-wrap">
     <button type="button" class="btn btn-primary" @onclick="CopyWorkshopIdsAsync">
-        Copy Workshop IDs (all approved)
+        Copy Workshop IDs (all games)
     </button>
     <button type="button" class="btn btn-primary" @onclick="CopyZomboidModIdsAsync">
         Copy Zomboid Mod IDs (\-prefixed)
@@ -35,13 +35,13 @@
     }
 </div>
 
-@if (_requests is null)
+@if (_mods is null)
 {
     <p><em>Loading...</em></p>
 }
-else if (_requests.Count == 0)
+else if (_mods.Count == 0)
 {
-    <p><em>No approved mods for @_selectedGame yet.</em></p>
+    <p><em>No mods on the @_selectedGame modlist yet.</em></p>
 }
 else
 {
@@ -49,22 +49,20 @@ else
         <table class="table table-sm align-middle">
             <thead>
                 <tr>
-                    <th>Title</th>
                     <th>Workshop item</th>
                     <th>Mod IDs</th>
                     <th>Requested by</th>
-                    <th>Approved</th>
+                    <th>Added to modlist</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var request in _requests)
+                @foreach (var mod in _mods)
                 {
                     <tr>
-                        <td>@request.Title</td>
-                        <td><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=@request.WorkshopId" target="_blank" rel="noopener noreferrer">@request.WorkshopId</a></td>
-                        <td>@string.Join(", ", request.ModIds.Select(m => m.ModId))</td>
-                        <td>@request.RequesterName</td>
-                        <td>@(request.DecidedAtUtc?.ToLocalTime().ToString("g"))</td>
+                        <td><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=@mod.WorkshopId" target="_blank" rel="noopener noreferrer">@mod.WorkshopId</a></td>
+                        <td>@string.Join(", ", mod.PzModIds.Select(m => m.Value))</td>
+                        <td>@string.Join(", ", mod.Requests.Select(r => r.RequesterName).Distinct())</td>
+                        <td>@(mod.AddedToModlistAtUtc?.ToLocalTime().ToString("g"))</td>
                     </tr>
                 }
             </tbody>
@@ -73,9 +71,9 @@ else
 }
 
 @code {
-    private List<string> _games = [ModRequest.DefaultGame];
-    private string _selectedGame = ModRequest.DefaultGame;
-    private List<ModRequest>? _requests;
+    private List<string> _games = [Mod.DefaultGame];
+    private string _selectedGame = Mod.DefaultGame;
+    private List<Mod>? _mods;
     private string? _copiedMessage;
     private IJSObjectReference? _clipboardModule;
 
@@ -99,13 +97,12 @@ else
 
     private async Task RefreshAsync()
     {
-        var all = await ModRequestService.GetRequestsAsync(RequestStatus.Approved);
-        _requests = all.Where(r => r.Game == _selectedGame).ToList();
+        _mods = await ModRequestService.GetModlistAsync(_selectedGame);
     }
 
     private async Task OnGameChangedAsync(ChangeEventArgs e)
     {
-        _selectedGame = e.Value?.ToString() ?? ModRequest.DefaultGame;
+        _selectedGame = e.Value?.ToString() ?? Mod.DefaultGame;
         _copiedMessage = null;
         await RefreshAsync();
     }
@@ -115,7 +112,7 @@ else
         var ids = await ModRequestService.BuildApprovedWorkshopIdExportAsync();
         var module = await GetClipboardModuleAsync();
         await module.InvokeVoidAsync("copyToClipboard", ids);
-        _copiedMessage = string.IsNullOrEmpty(ids) ? "No approved mods to copy." : "Copied!";
+        _copiedMessage = string.IsNullOrEmpty(ids) ? "No mods on the modlist to copy." : "Copied!";
     }
 
     private async Task CopyZomboidModIdsAsync()

@@ -9,7 +9,7 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
 {
     public record CreateResult(bool Success, string? Error, int? RequestId);
 
-    public async Task<CreateResult> CreateRequestAsync(string? title, string? workshopInput, string? requesterName, string game = ModRequest.DefaultGame)
+    public async Task<CreateResult> CreateRequestAsync(string? title, string? workshopInput, string? requesterName, string game = Mod.DefaultGame)
     {
         title = title?.Trim();
         if (string.IsNullOrWhiteSpace(title))
@@ -30,21 +30,30 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
         }
 
         await using var db = await dbContextFactory.CreateDbContextAsync();
+
+        var mod = await db.Mods.FirstOrDefaultAsync(m => m.Game == game && m.WorkshopId == workshopId);
+        var isNewMod = mod is null;
+        if (mod is null)
+        {
+            mod = new Mod { Game = game, WorkshopId = workshopId, FetchStatus = ModIdFetchStatus.Queued };
+            db.Mods.Add(mod);
+        }
+
         var request = new ModRequest
         {
             Title = title,
-            Game = game,
-            WorkshopUrlInput = workshopInput!.Trim(),
-            WorkshopId = workshopId,
+            Mod = mod,
             RequesterName = normalizedName,
-            Status = RequestStatus.Pending,
-            FetchStatus = ModIdFetchStatus.Queued
+            Status = RequestStatus.Pending
         };
-
         db.ModRequests.Add(request);
+
         await db.SaveChangesAsync();
 
-        fetchQueue.Enqueue(request.Id);
+        if (isNewMod)
+        {
+            fetchQueue.Enqueue(mod.Id);
+        }
 
         return new CreateResult(true, null, request.Id);
     }
@@ -76,8 +85,8 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
     public async Task<List<string>> GetDistinctGamesAsync()
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();
-        return await db.ModRequests
-            .Select(r => r.Game)
+        return await db.Mods
+            .Select(m => m.Game)
             .Distinct()
             .OrderBy(g => g)
             .ToListAsync();
@@ -86,7 +95,10 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
     public async Task<List<ModRequest>> GetRequestsAsync(RequestStatus? status = null)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();
-        var query = db.ModRequests.Include(r => r.ModIds).OrderByDescending(r => r.CreatedAtUtc).AsQueryable();
+        var query = db.ModRequests
+            .Include(r => r.Mod!).ThenInclude(m => m.PzModIds)
+            .OrderByDescending(r => r.CreatedAtUtc)
+            .AsQueryable();
         if (status is not null)
         {
             query = query.Where(r => r.Status == status);
@@ -95,90 +107,125 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
         return await query.ToListAsync();
     }
 
+    /// <summary>The current modlist: every Mod with at least one approved request, optionally filtered by game.</summary>
+    public async Task<List<Mod>> GetModlistAsync(string? game = null)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        var query = db.Mods
+            .Include(m => m.PzModIds)
+            .Include(m => m.Requests)
+            .Where(m => m.IsInModlist)
+            .AsQueryable();
+        if (game is not null)
+        {
+            query = query.Where(m => m.Game == game);
+        }
+
+        return await query.OrderBy(m => m.Id).ToListAsync();
+    }
+
     public async Task SetStatusAsync(int requestId, RequestStatus status)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();
-        var request = await db.ModRequests.FirstOrDefaultAsync(r => r.Id == requestId);
-        if (request is null)
+        var request = await db.ModRequests.Include(r => r.Mod).FirstOrDefaultAsync(r => r.Id == requestId);
+        if (request?.Mod is null)
         {
             return;
         }
 
         request.Status = status;
         request.DecidedAtUtc = DateTime.UtcNow;
+
+        if (status == RequestStatus.Approved)
+        {
+            request.Mod.IsInModlist = true;
+            request.Mod.AddedToModlistAtUtc ??= DateTime.UtcNow;
+        }
+        else
+        {
+            var stillApprovedElsewhere = await db.ModRequests.AnyAsync(r =>
+                r.Id != requestId && r.ModId == request.ModId && r.Status == RequestStatus.Approved);
+            if (!stillApprovedElsewhere)
+            {
+                request.Mod.IsInModlist = false;
+            }
+        }
+
         await db.SaveChangesAsync();
     }
 
-    public async Task RetryFetchAsync(int requestId)
+    public async Task RetryFetchAsync(int modId)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();
-        var request = await db.ModRequests.FirstOrDefaultAsync(r => r.Id == requestId);
-        if (request is null)
+        var mod = await db.Mods.FirstOrDefaultAsync(m => m.Id == modId);
+        if (mod is null)
         {
             return;
         }
 
-        request.FetchStatus = ModIdFetchStatus.Queued;
-        request.FetchLog = null;
+        mod.FetchStatus = ModIdFetchStatus.Queued;
+        mod.FetchLog = null;
         await db.SaveChangesAsync();
 
-        fetchQueue.Enqueue(requestId);
+        fetchQueue.Enqueue(modId);
     }
 
-    public async Task AddManualModIdAsync(int requestId, string modId, string? modName)
+    public async Task AddManualModIdAsync(int modId, string modIdValue, string? modName)
     {
-        modId = modId.Trim();
-        if (modId.Length == 0)
+        modIdValue = modIdValue.Trim();
+        if (modIdValue.Length == 0)
         {
             return;
         }
 
         await using var db = await dbContextFactory.CreateDbContextAsync();
-        db.ModRequestModIds.Add(new ModRequestModId
+        db.PzModIds.Add(new PzModId
         {
-            ModRequestId = requestId,
             ModId = modId,
-            ModName = string.IsNullOrWhiteSpace(modName) ? null : modName.Trim(),
+            Value = modIdValue,
+            Name = string.IsNullOrWhiteSpace(modName) ? null : modName.Trim(),
             IsManual = true
         });
         await db.SaveChangesAsync();
     }
 
-    public async Task DeleteModIdAsync(int modRequestModIdId)
+    public async Task DeletePzModIdAsync(int pzModIdId)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();
-        var entry = await db.ModRequestModIds.FirstOrDefaultAsync(m => m.Id == modRequestModIdId);
+        var entry = await db.PzModIds.FirstOrDefaultAsync(m => m.Id == pzModIdId);
         if (entry is null)
         {
             return;
         }
 
-        db.ModRequestModIds.Remove(entry);
+        db.PzModIds.Remove(entry);
         await db.SaveChangesAsync();
     }
 
-    /// <summary>Semicolon-delimited Steam Workshop item IDs for every approved request, regardless of game.</summary>
+    /// <summary>Semicolon-delimited Steam Workshop item IDs for every mod currently on a modlist, regardless of game.</summary>
     public async Task<string> BuildApprovedWorkshopIdExportAsync()
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();
-        var ids = await db.ModRequests
-            .Where(r => r.Status == RequestStatus.Approved)
-            .Select(r => r.WorkshopId)
+        var ids = await db.Mods
+            .Where(m => m.IsInModlist)
+            .OrderBy(m => m.Id)
+            .Select(m => m.WorkshopId)
             .ToListAsync();
         return string.Join(';', ids);
     }
 
     /// <summary>
-    /// Semicolon-delimited Project Zomboid Mod IDs for approved Project Zomboid requests, each prefixed
-    /// with a backslash (matching the Mods= line format PZ server configs expect).
+    /// Semicolon-delimited Project Zomboid Mod IDs for mods currently on the Project Zomboid modlist,
+    /// each prefixed with a backslash (matching the Mods= line format PZ server configs expect).
     /// </summary>
     public async Task<string> BuildApprovedZomboidModIdExportAsync()
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();
-        var modIds = await db.ModRequests
-            .Where(r => r.Status == RequestStatus.Approved && r.Game == ModRequest.DefaultGame)
-            .SelectMany(r => r.ModIds)
-            .Select(m => m.ModId)
+        var modIds = await db.Mods
+            .Where(m => m.IsInModlist && m.Game == Mod.DefaultGame)
+            .OrderBy(m => m.Id)
+            .SelectMany(m => m.PzModIds)
+            .Select(p => p.Value)
             .ToListAsync();
         return string.Join(';', modIds.Select(id => $"\\{id}"));
     }

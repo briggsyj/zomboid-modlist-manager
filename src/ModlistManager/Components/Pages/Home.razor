@@ -68,15 +68,15 @@ else
                 {
                     <tr>
                         <td>@request.Title</td>
-                        <td>@request.Game</td>
-                        <td><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=@request.WorkshopId" target="_blank" rel="noopener noreferrer">@request.WorkshopId</a></td>
+                        <td>@request.Mod!.Game</td>
+                        <td><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=@request.Mod!.WorkshopId" target="_blank" rel="noopener noreferrer">@request.Mod!.WorkshopId</a></td>
                         <td>@request.RequesterName</td>
                         <td><span class="badge @StatusBadgeClass(request.Status)">@request.Status</span></td>
                         <td>
-                            <span class="badge @FetchStatusBadgeClass(request.FetchStatus)">@request.FetchStatus</span>
-                            @if (request.ModIds.Count > 0)
+                            <span class="badge @FetchStatusBadgeClass(request.Mod!.FetchStatus)">@request.Mod!.FetchStatus</span>
+                            @if (request.Mod!.PzModIds.Count > 0)
                             {
-                                <div class="small text-muted">@string.Join(", ", request.ModIds.Select(m => m.ModId))</div>
+                                <div class="small text-muted">@string.Join(", ", request.Mod!.PzModIds.Select(m => m.Value))</div>
                             }
                         </td>
                         <td>@request.CreatedAtUtc.ToLocalTime().ToString("g")</td>
@@ -115,7 +115,7 @@ else
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(4));
         while (await timer.WaitForNextTickAsync(token))
         {
-            if (_requests is null || _requests.All(r => r.FetchStatus is ModIdFetchStatus.Completed or ModIdFetchStatus.Failed))
+            if (_requests is null || _requests.All(r => r.Mod!.FetchStatus is ModIdFetchStatus.Completed or ModIdFetchStatus.Failed))
             {
                 continue;
             }

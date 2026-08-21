@@ -11,7 +11,7 @@ using ModlistManager.Data;
 namespace ModlistManager.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260821064931_InitialCreate")]
+    [Migration("20260821111910_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -39,6 +39,41 @@ namespace ModlistManager.Data.Migrations
                     b.ToTable("AdminCredentials");
                 });
 
+            modelBuilder.Entity("ModlistManager.Data.Entities.Mod", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("AddedToModlistAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FetchLog")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FetchStatus")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Game")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsInModlist")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("WorkshopId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Game", "WorkshopId")
+                        .IsUnique();
+
+                    b.ToTable("Mods");
+                });
+
             modelBuilder.Entity("ModlistManager.Data.Entities.ModRequest", b =>
                 {
                     b.Property<int>("Id")
@@ -54,16 +89,8 @@ namespace ModlistManager.Data.Migrations
                     b.Property<DateTime?>("DecidedAtUtc")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("FetchLog")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("FetchStatus")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Game")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
+                    b.Property<int>("ModId")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("RequesterName")
                         .IsRequired()
@@ -77,17 +104,9 @@ namespace ModlistManager.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("WorkshopId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("WorkshopUrlInput")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("Game");
+                    b.HasIndex("ModId");
 
                     b.HasIndex("RequesterName");
 
@@ -96,7 +115,7 @@ namespace ModlistManager.Data.Migrations
                     b.ToTable("ModRequests");
                 });
 
-            modelBuilder.Entity("ModlistManager.Data.Entities.ModRequestModId", b =>
+            modelBuilder.Entity("ModlistManager.Data.Entities.PzModId", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -105,37 +124,50 @@ namespace ModlistManager.Data.Migrations
                     b.Property<bool>("IsManual")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("ModId")
+                    b.Property<int>("ModId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ModName")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("ModRequestId")
-                        .HasColumnType("INTEGER");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("ModRequestId");
+                    b.HasIndex("ModId");
 
-                    b.ToTable("ModRequestModIds");
-                });
-
-            modelBuilder.Entity("ModlistManager.Data.Entities.ModRequestModId", b =>
-                {
-                    b.HasOne("ModlistManager.Data.Entities.ModRequest", "ModRequest")
-                        .WithMany("ModIds")
-                        .HasForeignKey("ModRequestId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ModRequest");
+                    b.ToTable("PzModIds");
                 });
 
             modelBuilder.Entity("ModlistManager.Data.Entities.ModRequest", b =>
                 {
-                    b.Navigation("ModIds");
+                    b.HasOne("ModlistManager.Data.Entities.Mod", "Mod")
+                        .WithMany("Requests")
+                        .HasForeignKey("ModId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Mod");
+                });
+
+            modelBuilder.Entity("ModlistManager.Data.Entities.PzModId", b =>
+                {
+                    b.HasOne("ModlistManager.Data.Entities.Mod", "Mod")
+                        .WithMany("PzModIds")
+                        .HasForeignKey("ModId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Mod");
+                });
+
+            modelBuilder.Entity("ModlistManager.Data.Entities.Mod", b =>
+                {
+                    b.Navigation("PzModIds");
+
+                    b.Navigation("Requests");
                 });
 #pragma warning restore 612, 618
         }

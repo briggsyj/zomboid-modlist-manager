@@ -26,59 +26,74 @@ namespace ModlistManager.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Mods",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    Game = table.Column<string>(type: "TEXT", nullable: false),
+                    WorkshopId = table.Column<string>(type: "TEXT", nullable: false),
+                    FetchStatus = table.Column<string>(type: "TEXT", nullable: false),
+                    FetchLog = table.Column<string>(type: "TEXT", nullable: true),
+                    IsInModlist = table.Column<bool>(type: "INTEGER", nullable: false),
+                    AddedToModlistAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Mods", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "ModRequests",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
                     Title = table.Column<string>(type: "TEXT", nullable: false),
-                    Game = table.Column<string>(type: "TEXT", nullable: false),
-                    WorkshopUrlInput = table.Column<string>(type: "TEXT", nullable: false),
-                    WorkshopId = table.Column<string>(type: "TEXT", nullable: false),
+                    ModId = table.Column<int>(type: "INTEGER", nullable: false),
                     RequesterName = table.Column<string>(type: "TEXT", nullable: false),
                     Status = table.Column<string>(type: "TEXT", nullable: false),
                     CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
                     DecidedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    AdminNotes = table.Column<string>(type: "TEXT", nullable: true),
-                    FetchStatus = table.Column<string>(type: "TEXT", nullable: false),
-                    FetchLog = table.Column<string>(type: "TEXT", nullable: true)
+                    AdminNotes = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ModRequests", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ModRequests_Mods_ModId",
+                        column: x => x.ModId,
+                        principalTable: "Mods",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
-                name: "ModRequestModIds",
+                name: "PzModIds",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
-                    ModRequestId = table.Column<int>(type: "INTEGER", nullable: false),
-                    ModId = table.Column<string>(type: "TEXT", nullable: false),
-                    ModName = table.Column<string>(type: "TEXT", nullable: true),
+                    ModId = table.Column<int>(type: "INTEGER", nullable: false),
+                    Value = table.Column<string>(type: "TEXT", nullable: false),
+                    Name = table.Column<string>(type: "TEXT", nullable: true),
                     IsManual = table.Column<bool>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_ModRequestModIds", x => x.Id);
+                    table.PrimaryKey("PK_PzModIds", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_ModRequestModIds_ModRequests_ModRequestId",
-                        column: x => x.ModRequestId,
-                        principalTable: "ModRequests",
+                        name: "FK_PzModIds_Mods_ModId",
+                        column: x => x.ModId,
+                        principalTable: "Mods",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_ModRequestModIds_ModRequestId",
-                table: "ModRequestModIds",
-                column: "ModRequestId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ModRequests_Game",
+                name: "IX_ModRequests_ModId",
                 table: "ModRequests",
-                column: "Game");
+                column: "ModId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ModRequests_RequesterName",
@@ -89,6 +104,17 @@ namespace ModlistManager.Data.Migrations
                 name: "IX_ModRequests_Status",
                 table: "ModRequests",
                 column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Mods_Game_WorkshopId",
+                table: "Mods",
+                columns: new[] { "Game", "WorkshopId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PzModIds_ModId",
+                table: "PzModIds",
+                column: "ModId");
         }
 
         /// <inheritdoc />
@@ -98,10 +124,13 @@ namespace ModlistManager.Data.Migrations
                 name: "AdminCredentials");
 
             migrationBuilder.DropTable(
-                name: "ModRequestModIds");
+                name: "ModRequests");
 
             migrationBuilder.DropTable(
-                name: "ModRequests");
+                name: "PzModIds");
+
+            migrationBuilder.DropTable(
+                name: "Mods");
         }
     }
 }

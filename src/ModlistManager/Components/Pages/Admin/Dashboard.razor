@@ -46,36 +46,41 @@ else
             <tbody>
                 @foreach (var request in _requests)
                 {
+                    var mod = request.Mod!;
                     <tr>
                         <td>@request.Title</td>
-                        <td>@request.Game</td>
-                        <td><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=@request.WorkshopId" target="_blank" rel="noopener noreferrer">@request.WorkshopId</a></td>
+                        <td>@mod.Game</td>
+                        <td><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=@mod.WorkshopId" target="_blank" rel="noopener noreferrer">@mod.WorkshopId</a></td>
                         <td>@request.RequesterName</td>
                         <td><span class="badge @StatusBadgeClass(request.Status)">@request.Status</span></td>
                         <td style="min-width: 16rem;">
-                            <span class="badge @FetchStatusBadgeClass(request.FetchStatus)">@request.FetchStatus</span>
-                            @if (!string.IsNullOrWhiteSpace(request.FetchLog))
+                            <span class="badge @FetchStatusBadgeClass(mod.FetchStatus)">@mod.FetchStatus</span>
+                            @if (mod.IsInModlist)
                             {
-                                <div class="small text-muted" style="white-space: pre-wrap;">@request.FetchLog</div>
+                                <span class="badge bg-primary">on modlist</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(mod.FetchLog))
+                            {
+                                <div class="small text-muted" style="white-space: pre-wrap;">@mod.FetchLog</div>
                             }
                             <ul class="list-unstyled mb-1 mt-1">
-                                @foreach (var modId in request.ModIds)
+                                @foreach (var modId in mod.PzModIds)
                                 {
                                     <li>
-                                        <code>@modId.ModId</code>
-                                        @if (!string.IsNullOrWhiteSpace(modId.ModName)) { <span class="text-muted"> (@modId.ModName)</span> }
+                                        <code>@modId.Value</code>
+                                        @if (!string.IsNullOrWhiteSpace(modId.Name)) { <span class="text-muted"> (@modId.Name)</span> }
                                         @if (modId.IsManual) { <span class="badge bg-secondary">manual</span> }
-                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1" @onclick="() => DeleteModIdAsync(modId.Id)">remove</button>
+                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1" @onclick="() => DeletePzModIdAsync(modId.Id)">remove</button>
                                     </li>
                                 }
                             </ul>
                             <div class="input-group input-group-sm">
-                                <input class="form-control" placeholder="Add mod ID" @bind="_pendingModId[request.Id]" @bind:event="oninput" />
-                                <button class="btn btn-outline-secondary" type="button" @onclick="() => AddManualModIdAsync(request.Id)">Add</button>
+                                <input class="form-control" placeholder="Add mod ID" @bind="_pendingModId[mod.Id]" @bind:event="oninput" />
+                                <button class="btn btn-outline-secondary" type="button" @onclick="() => AddManualModIdAsync(mod.Id)">Add</button>
                             </div>
-                            @if (request.FetchStatus == ModIdFetchStatus.Failed)
+                            @if (mod.FetchStatus == ModIdFetchStatus.Failed)
                             {
-                                <button type="button" class="btn btn-sm btn-outline-warning mt-1" @onclick="() => RetryFetchAsync(request.Id)">Retry fetch</button>
+                                <button type="button" class="btn btn-sm btn-outline-warning mt-1" @onclick="() => RetryFetchAsync(mod.Id)">Retry fetch</button>
                             }
                         </td>
                         <td class="text-nowrap">
@@ -103,7 +108,7 @@ else
         _requests = await ModRequestService.GetRequestsAsync(_filter);
         foreach (var request in _requests)
         {
-            _pendingModId.TryAdd(request.Id, string.Empty);
+            _pendingModId.TryAdd(request.Mod!.Id, string.Empty);
         }
     }
 
@@ -119,27 +124,27 @@ else
         await RefreshAsync();
     }
 
-    private async Task RetryFetchAsync(int requestId)
+    private async Task RetryFetchAsync(int modId)
     {
-        await ModRequestService.RetryFetchAsync(requestId);
+        await ModRequestService.RetryFetchAsync(modId);
         await RefreshAsync();
     }
 
-    private async Task AddManualModIdAsync(int requestId)
+    private async Task AddManualModIdAsync(int modId)
     {
-        if (!_pendingModId.TryGetValue(requestId, out var modId) || string.IsNullOrWhiteSpace(modId))
+        if (!_pendingModId.TryGetValue(modId, out var value) || string.IsNullOrWhiteSpace(value))
         {
             return;
         }
 
-        await ModRequestService.AddManualModIdAsync(requestId, modId, null);
-        _pendingModId[requestId] = string.Empty;
+        await ModRequestService.AddManualModIdAsync(modId, value, null);
+        _pendingModId[modId] = string.Empty;
         await RefreshAsync();
     }
 
-    private async Task DeleteModIdAsync(int modRequestModIdId)
+    private async Task DeletePzModIdAsync(int pzModIdId)
     {
-        await ModRequestService.DeleteModIdAsync(modRequestModIdId);
+        await ModRequestService.DeletePzModIdAsync(pzModIdId);
         await RefreshAsync();
     }
 

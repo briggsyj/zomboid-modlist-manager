@@ -6,19 +6,25 @@ A small .NET 10 Blazor Web App for managing Steam Workshop mod requests for a Pr
 
 - Anyone can submit a mod request (title, Steam Workshop link or item ID, requester name with
   autocomplete over previously-used names).
+- Each request is attached to a `Mod` record (Steam Workshop item + game), deduplicated by
+  (game, workshop ID) - if two people request the same workshop item, both requests point at the
+  same Mod rather than tracking separate copies of its fetch status/Mod IDs.
 - A single admin account (password-protected) can approve, backlog, or decline requests.
-- When a request is submitted, the app shells out to `steamcmd` in the background to anonymously
-  download the workshop item and read its `mod.info` file(s), discovering the real Project Zomboid
-  Mod ID(s) (which differ from the Steam Workshop item ID, and a single workshop item can bundle
-  several mods). This can fail (SteamCMD missing, item isn't a valid PZ mod, non-standard layout,
-  etc) - in which case an admin can add/edit Mod IDs manually and retry the fetch.
+- When a request creates a new Mod, the app shells out to `steamcmd` in the background to
+  anonymously download the workshop item and read its `mod.info` file(s), discovering the real
+  Project Zomboid Mod ID(s) (which differ from the Steam Workshop item ID, and a single workshop
+  item can bundle several mods). This can fail (SteamCMD missing, item isn't a valid PZ mod,
+  non-standard layout, etc) - in which case an admin can add/edit Mod IDs manually and retry the fetch.
+- Approving a request adds its Mod to the modlist for that game; if another request for the same
+  Mod is later un-approved, the Mod only leaves the modlist once no approved request references it
+  anymore.
 - Admin pages:
-  - `/admin` - review queue with approve/backlog/decline actions, per-request Mod ID list/editor,
-    and a retry button when the automatic fetch fails.
-  - `/admin/approved` - approved mods for a selected game, plus two clipboard-copy buttons:
-    - all approved Steam Workshop item IDs, semicolon-delimited
-    - approved Project Zomboid Mod IDs, semicolon-delimited and each prefixed with `\`
-      (the format PZ server configs expect for `Mods=`)
+  - `/admin` - review queue with approve/backlog/decline actions, per-mod Mod ID list/editor, and
+    a retry button when the automatic fetch fails.
+  - `/admin/approved` - the modlist for a selected game, plus two clipboard-copy buttons:
+    - all Steam Workshop item IDs currently on a modlist (any game), semicolon-delimited
+    - Project Zomboid Mod IDs currently on the Project Zomboid modlist, semicolon-delimited and
+      each prefixed with `\` (the format PZ server configs expect for `Mods=`)
 - Data is stored in SQLite - no external database required.
 
 ## Tech stack

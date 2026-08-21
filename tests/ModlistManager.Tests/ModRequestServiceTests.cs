@@ -14,6 +14,9 @@ public class ModRequestServiceTests : IDisposable
         _service = new ModRequestService(_dbFactory, new SteamCmdFetchQueue());
     }
 
+    private async Task<ModRequest> GetRequestAsync(int requestId) =>
+        (await _service.GetRequestsAsync()).Single(r => r.Id == requestId);
+
     [Fact]
     public async Task CreateRequestAsync_NormalizesNameAndParsesWorkshopId()
     {
@@ -23,7 +26,7 @@ public class ModRequestServiceTests : IDisposable
         Assert.True(result.Success);
         var requests = await _service.GetRequestsAsync();
         var created = Assert.Single(requests);
-        Assert.Equal("3783094058", created.WorkshopId);
+        Assert.Equal("3783094058", created.Mod!.WorkshopId);
         Assert.Equal("jane doe", created.RequesterName);
         Assert.Equal(RequestStatus.Pending, created.Status);
     }
@@ -49,6 +52,17 @@ public class ModRequestServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateRequestAsync_ReusesExistingModForSameWorkshopIdAndGame()
+    {
+        await _service.CreateRequestAsync("A", "111", "Alice");
+        await _service.CreateRequestAsync("B", "111", "Bob");
+
+        var requests = await _service.GetRequestsAsync();
+        Assert.Equal(2, requests.Count);
+        Assert.Equal(requests[0].ModId, requests[1].ModId);
+    }
+
+    [Fact]
     public async Task SetStatusAsync_UpdatesStatusAndDecidedAt()
     {
         var created = await _service.CreateRequestAsync("Title", "12345", "Someone");
@@ -58,6 +72,59 @@ public class ModRequestServiceTests : IDisposable
         var request = Assert.Single(await _service.GetRequestsAsync(RequestStatus.Approved));
         Assert.Equal(RequestStatus.Approved, request.Status);
         Assert.NotNull(request.DecidedAtUtc);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_Approved_AddsModToModlist()
+    {
+        var created = await _service.CreateRequestAsync("Title", "111", "Alice");
+
+        await _service.SetStatusAsync(created.RequestId!.Value, RequestStatus.Approved);
+
+        var modlist = await _service.GetModlistAsync();
+        var entry = Assert.Single(modlist);
+        Assert.Equal("111", entry.WorkshopId);
+        Assert.True(entry.IsInModlist);
+        Assert.NotNull(entry.AddedToModlistAtUtc);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_TwoRequestsForSameMod_ApprovingEitherKeepsOneModlistEntry()
+    {
+        var a = await _service.CreateRequestAsync("A", "111", "Alice");
+        var b = await _service.CreateRequestAsync("B", "111", "Bob");
+
+        await _service.SetStatusAsync(a.RequestId!.Value, RequestStatus.Approved);
+        await _service.SetStatusAsync(b.RequestId!.Value, RequestStatus.Approved);
+
+        var modlist = await _service.GetModlistAsync();
+        Assert.Single(modlist);
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_UnapprovingLastApprovedRequest_RemovesModFromModlist()
+    {
+        var created = await _service.CreateRequestAsync("Title", "111", "Alice");
+        await _service.SetStatusAsync(created.RequestId!.Value, RequestStatus.Approved);
+
+        await _service.SetStatusAsync(created.RequestId!.Value, RequestStatus.Declined);
+
+        Assert.Empty(await _service.GetModlistAsync());
+    }
+
+    [Fact]
+    public async Task SetStatusAsync_UnapprovingOneOfTwoRequests_KeepsModOnModlist()
+    {
+        var a = await _service.CreateRequestAsync("A", "111", "Alice");
+        var b = await _service.CreateRequestAsync("B", "111", "Bob");
+        await _service.SetStatusAsync(a.RequestId!.Value, RequestStatus.Approved);
+        await _service.SetStatusAsync(b.RequestId!.Value, RequestStatus.Approved);
+
+        await _service.SetStatusAsync(a.RequestId!.Value, RequestStatus.Declined);
+
+        var modlist = await _service.GetModlistAsync();
+        var entry = Assert.Single(modlist);
+        Assert.True(entry.IsInModlist);
     }
 
     [Fact]
@@ -78,10 +145,11 @@ public class ModRequestServiceTests : IDisposable
     [Fact]
     public async Task BuildApprovedZomboidModIdExportAsync_PrefixesEachIdWithBackslash()
     {
-        var request = await _service.CreateRequestAsync("A", "111", "Alice");
-        await _service.SetStatusAsync(request.RequestId!.Value, RequestStatus.Approved);
-        await _service.AddManualModIdAsync(request.RequestId!.Value, "FirstMod", null);
-        await _service.AddManualModIdAsync(request.RequestId!.Value, "SecondMod", null);
+        var created = await _service.CreateRequestAsync("A", "111", "Alice");
+        await _service.SetStatusAsync(created.RequestId!.Value, RequestStatus.Approved);
+        var modId = (await GetRequestAsync(created.RequestId!.Value)).ModId;
+        await _service.AddManualModIdAsync(modId, "FirstMod", null);
+        await _service.AddManualModIdAsync(modId, "SecondMod", null);
 
         var export = await _service.BuildApprovedZomboidModIdExportAsync();
 
@@ -91,13 +159,27 @@ public class ModRequestServiceTests : IDisposable
     [Fact]
     public async Task BuildApprovedZomboidModIdExportAsync_ExcludesOtherGames()
     {
-        var request = await _service.CreateRequestAsync("A", "111", "Alice", game: "Some Other Game");
-        await _service.SetStatusAsync(request.RequestId!.Value, RequestStatus.Approved);
-        await _service.AddManualModIdAsync(request.RequestId!.Value, "ShouldNotAppear", null);
+        var created = await _service.CreateRequestAsync("A", "111", "Alice", game: "Some Other Game");
+        await _service.SetStatusAsync(created.RequestId!.Value, RequestStatus.Approved);
+        var modId = (await GetRequestAsync(created.RequestId!.Value)).ModId;
+        await _service.AddManualModIdAsync(modId, "ShouldNotAppear", null);
 
         var export = await _service.BuildApprovedZomboidModIdExportAsync();
 
         Assert.Equal(string.Empty, export);
+    }
+
+    [Fact]
+    public async Task DeletePzModIdAsync_RemovesEntry()
+    {
+        var created = await _service.CreateRequestAsync("A", "111", "Alice");
+        var modId = (await GetRequestAsync(created.RequestId!.Value)).ModId;
+        await _service.AddManualModIdAsync(modId, "SomeMod", null);
+        var pzModId = (await GetRequestAsync(created.RequestId!.Value)).Mod!.PzModIds.Single().Id;
+
+        await _service.DeletePzModIdAsync(pzModId);
+
+        Assert.Empty((await GetRequestAsync(created.RequestId!.Value)).Mod!.PzModIds);
     }
 
     [Fact]
