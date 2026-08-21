@@ -4,6 +4,8 @@
 
 <div class="name-autocomplete">
     <input type="text"
+           id="@Id"
+           name="@Name"
            class="form-control"
            value="@Value"
            placeholder="@Placeholder"
@@ -39,6 +41,13 @@
 
     [Parameter]
     public IReadOnlyList<string> Suggestions { get; set; } = [];
+
+    /// <summary>The "name" attribute on the underlying input, so it's included in a native (non-Blazor) form POST.</summary>
+    [Parameter]
+    public string? Name { get; set; }
+
+    [Parameter]
+    public string? Id { get; set; }
 
     [Parameter]
     public string? Placeholder { get; set; }

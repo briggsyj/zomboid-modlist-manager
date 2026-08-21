@@ -26,6 +26,7 @@ RUN dpkg --add-architecture i386 \
 ENV SteamCmd__ExecutablePath=/opt/steamcmd/steamcmd.sh \
     SteamCmd__WorkshopContentRoot=/opt/steamcmd \
     ConnectionStrings__Default="Data Source=/data/modlist.db" \
+    DataProtection__KeyPath=/data/keys \
     ASPNETCORE_URLS=http://+:8080 \
     ASPNETCORE_ENVIRONMENT=Production
 

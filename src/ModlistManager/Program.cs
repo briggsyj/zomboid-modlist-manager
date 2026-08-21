@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using ModlistManager.Components;
 using ModlistManager.Data;
@@ -11,6 +12,15 @@ var builder = WebApplication.CreateBuilder(args);
 // Data
 var connectionString = builder.Configuration.GetConnectionString("Default") ?? "Data Source=modlist.db";
 builder.Services.AddDbContextFactory<AppDbContext>(options => options.UseSqlite(connectionString));
+
+// Persist Data Protection keys (used to sign/encrypt the auth cookie and antiforgery tokens) outside
+// the container filesystem, so they survive restarts instead of silently invalidating existing
+// sessions/tokens on every redeploy.
+var dataProtectionKeyPath = builder.Configuration["DataProtection:KeyPath"];
+if (!string.IsNullOrWhiteSpace(dataProtectionKeyPath))
+{
+    builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyPath));
+}
 
 // App services
 builder.Services.Configure<SteamCmdOptions>(builder.Configuration.GetSection(SteamCmdOptions.SectionName));
@@ -97,6 +107,20 @@ app.MapPost("/account/logout", async (HttpContext ctx) =>
 {
     await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.LocalRedirect("/");
+});
+
+// Plain (non-Blazor) endpoint for submitting a mod request: EditForm/OnValidSubmit renders a real
+// <form> as a progressive-enhancement fallback for when the interactive circuit isn't connected yet,
+// but nothing was wired up to handle that fallback POST - it just 400'd on antiforgery validation.
+// A plain form + minimal API endpoint (matching the login pattern above) sidesteps that entirely.
+app.MapPost("/requests", async (HttpContext ctx, ModRequestService requestService) =>
+{
+    var form = await ctx.Request.ReadFormAsync();
+    var result = await requestService.CreateRequestAsync(form["title"], form["workshopInput"], form["requesterName"]);
+
+    return result.Success
+        ? Results.LocalRedirect("/")
+        : Results.LocalRedirect($"/?error={Uri.EscapeDataString(result.Error ?? "Could not create the request.")}");
 });
 
 app.Run();

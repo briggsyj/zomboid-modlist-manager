@@ -14,27 +14,28 @@
     <div class="card-body">
         <h2 class="h5">New request</h2>
 
-        @if (_error is not null)
+        @if (Error is not null)
         {
-            <div class="alert alert-danger">@_error</div>
+            <div class="alert alert-danger">@Error</div>
         }
 
-        <EditForm Model="this" OnValidSubmit="SubmitAsync">
+        @* Plain HTML form posting to a minimal API endpoint - deliberately not an EditForm/OnValidSubmit,
+           so creating a request never depends on the interactive SignalR circuit having connected. *@
+        <form method="post" action="/requests">
             <div class="mb-3">
                 <label class="form-label" for="title">Title</label>
-                <input id="title" class="form-control" @bind="_title" @bind:event="oninput" />
+                <input id="title" name="title" class="form-control" />
             </div>
             <div class="mb-3">
                 <label class="form-label" for="workshop">Steam Workshop link or item ID</label>
-                <input id="workshop" class="form-control" placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=3783094058"
-                       @bind="_workshopInput" @bind:event="oninput" />
+                <input id="workshop" name="workshopInput" class="form-control" placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=3783094058" />
             </div>
             <div class="mb-3">
                 <label class="form-label" for="name">Your name</label>
-                <NameAutocomplete @bind-Value="_requesterName" Suggestions="_nameSuggestions" Placeholder="Your name" />
+                <NameAutocomplete Id="name" Name="requesterName" Suggestions="_nameSuggestions" Placeholder="Your name" />
             </div>
-            <button type="submit" class="btn btn-primary" disabled="@_submitting">Submit request</button>
-        </EditForm>
+            <button type="submit" class="btn btn-primary">Submit request</button>
+        </form>
     </div>
 </div>
 
@@ -88,11 +89,9 @@ else
 }
 
 @code {
-    private string _title = string.Empty;
-    private string _workshopInput = string.Empty;
-    private string? _requesterName;
-    private string? _error;
-    private bool _submitting;
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
     private List<ModRequest>? _requests;
     private List<string> _nameSuggestions = [];
     private CancellationTokenSource? _pollCts;
@@ -122,30 +121,6 @@ else
 
             await RefreshAsync();
             await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    private async Task SubmitAsync()
-    {
-        _error = null;
-        _submitting = true;
-        try
-        {
-            var result = await ModRequestService.CreateRequestAsync(_title, _workshopInput, _requesterName);
-            if (!result.Success)
-            {
-                _error = result.Error;
-                return;
-            }
-
-            _title = string.Empty;
-            _workshopInput = string.Empty;
-            _requesterName = string.Empty;
-            await RefreshAsync();
-        }
-        finally
-        {
-            _submitting = false;
         }
     }
 
