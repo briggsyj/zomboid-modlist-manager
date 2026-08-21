@@ -5,6 +5,7 @@
 @using ModlistManager.Data.Entities
 @using ModlistManager.Services
 @inject ModRequestService ModRequestService
+@implements IAsyncDisposable
 
 <PageTitle>Admin - Requests</PageTitle>
 
@@ -100,8 +101,14 @@ else
     private RequestStatus? _filter = RequestStatus.Pending;
     private List<ModRequest>? _requests;
     private readonly Dictionary<int, string> _pendingModId = new();
+    private CancellationTokenSource? _pollCts;
 
-    protected override async Task OnInitializedAsync() => await RefreshAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        _pollCts = new CancellationTokenSource();
+        _ = PollWhilePendingAsync(_pollCts.Token);
+    }
 
     private async Task RefreshAsync()
     {
@@ -109,6 +116,30 @@ else
         foreach (var request in _requests)
         {
             _pendingModId.TryAdd(request.Mod!.Id, string.Empty);
+        }
+    }
+
+    private async Task PollWhilePendingAsync(CancellationToken token)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(4));
+        while (await timer.WaitForNextTickAsync(token))
+        {
+            if (_requests is null || _requests.All(r => r.Mod!.FetchStatus is ModIdFetchStatus.Completed or ModIdFetchStatus.Failed))
+            {
+                continue;
+            }
+
+            await RefreshAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_pollCts is not null)
+        {
+            await _pollCts.CancelAsync();
+            _pollCts.Dispose();
         }
     }
 
