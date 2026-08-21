@@ -169,8 +169,34 @@ git tag v1.0.0 && git push origin v1.0.0
 ```
 
 That publishes `ghcr.io/briggsyj/zomboid-modlist-manager` tagged `1.0.0`, `1.0`, `1` and `latest`.
-No secrets to configure - it authenticates with the built-in `GITHUB_TOKEN`. Note that GHCR packages
-default to private; make the package public from its GitHub page if you want unauthenticated pulls.
+No secrets to configure - it authenticates with the built-in `GITHUB_TOKEN`. A pre-release tag
+(`v1.1.0-rc1`) publishes its own version tags but does *not* move `latest`.
+
+### Deploying the published image
+
+`docker-compose.deploy.yml` runs the released image rather than building from source:
+
+```bash
+echo "ADMIN_PASSWORD=your-password-here" > .env
+docker compose -f docker-compose.deploy.yml up -d
+```
+
+Pin a version instead of `latest` if you'd rather upgrade deliberately:
+
+```yaml
+image: ghcr.io/briggsyj/zomboid-modlist-manager:1.0.0
+```
+
+To upgrade: `docker compose -f docker-compose.deploy.yml pull && ... up -d`. The database lives in
+the `modlist-data` volume, so it survives the swap, and schema migrations run automatically on start.
+
+GHCR packages default to **private**. Either make the package public from its page on GitHub
+(*Package settings → Change visibility*), or log the server in first with a personal access token
+that has `read:packages`:
+
+```bash
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u <your-username> --password-stdin
+```
 
 The arm64 image is only possible while SteamCMD stays out of the image (it's 32-bit x86 and its
 i386 dependencies have no arm64 build), so an `INSTALL_STEAMCMD=true` image must be amd64-only.

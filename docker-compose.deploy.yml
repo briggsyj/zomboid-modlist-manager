@@ -1,0 +1,21 @@
+# Runs the published image from the GitHub Container Registry instead of building locally.
+# Use this on a server:
+#
+#   ADMIN_PASSWORD=... docker compose -f docker-compose.deploy.yml up -d
+#
+# The image is multi-arch (amd64 + arm64), so there's deliberately no `platform:` pin here -
+# Docker picks the native one. Pin it only if you build with INSTALL_STEAMCMD=true, which is
+# amd64-only.
+services:
+  modlist-manager:
+    image: ghcr.io/briggsyj/zomboid-modlist-manager:latest
+    ports:
+      - "8080:8080"
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in a .env file next to this compose file}
+    volumes:
+      - modlist-data:/data
+    restart: unless-stopped
+
+volumes:
+  modlist-data:

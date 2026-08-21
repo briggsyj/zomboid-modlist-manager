@@ -60,11 +60,13 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
+          # No explicit "latest" entry: the default latest=auto flavour adds it only for
+          # non-prerelease semver, so tagging v1.0.0-rc1 can't quietly move latest onto a
+          # release candidate.
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest
 
       # arm64 is included so the image runs natively on Apple Silicon rather than under
       # emulation. It only works while SteamCMD stays out of the image: SteamCMD is 32-bit
