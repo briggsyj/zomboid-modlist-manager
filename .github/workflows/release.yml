@@ -2,7 +2,11 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    # Both conventions: this repo's existing tags are bare semver (0.1.0), and v-prefixed tags
+    # are common enough to be worth accepting too. metadata-action parses either.
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*'
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
 
 permissions:
   contents: read

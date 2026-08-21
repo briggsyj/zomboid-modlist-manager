@@ -159,13 +159,13 @@ the optional SteamCMD path.
 - **`ci.yml`** runs on every pull request and push to `main`: restores, builds, runs the test suite,
   and separately builds the Docker image (without publishing) - the Dockerfile has broken before in
   ways `dotnet build` can't catch.
-- **`release.yml`** runs on `v*` tags: runs the tests, then builds and pushes a multi-arch
-  (`linux/amd64` + `linux/arm64`) image to the GitHub Container Registry.
+- **`release.yml`** runs on semver tags - either `1.0.0` or `v1.0.0`: runs the tests, then builds
+  and pushes a multi-arch (`linux/amd64` + `linux/arm64`) image to the GitHub Container Registry.
 
 To cut a release:
 
 ```bash
-git tag v1.0.0 && git push origin v1.0.0
+git tag 1.0.0 && git push origin 1.0.0
 ```
 
 That publishes `ghcr.io/briggsyj/zomboid-modlist-manager` tagged `1.0.0`, `1.0`, `1` and `latest`.
