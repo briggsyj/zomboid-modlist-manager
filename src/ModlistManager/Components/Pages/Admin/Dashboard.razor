@@ -7,19 +7,22 @@
 @inject ModRequestService ModRequestService
 @implements IAsyncDisposable
 
-<PageTitle>Admin - Requests</PageTitle>
+<PageTitle>Manage - Requests</PageTitle>
 
-<MudText Typo="Typo.h4" GutterBottom="true">Admin</MudText>
+<MudText Typo="Typo.h4" GutterBottom="true">Manage</MudText>
 
-<MudChipSet T="RequestStatus?" SelectedValue="_filter" SelectedValueChanged="SetFilterAsync"
-            SelectionMode="SelectionMode.SingleSelection" Class="mb-4">
+@* OverrideStyles="false" so the selected filter can be filled while the rest stay outlined -
+   the group would otherwise force one shared style onto every button. *@
+<MudButtonGroup OverrideStyles="false" Class="mb-4">
     @foreach (var option in _filterOptions)
     {
-        <MudChip T="RequestStatus?" Value="@option" Color="Color.Primary" Variant="Variant.Outlined">
+        <MudButton Color="Color.Primary"
+                   Variant="@(option == _filter ? Variant.Filled : Variant.Outlined)"
+                   OnClick="@(() => SetFilterAsync(option))">
             @(option?.ToString() ?? "All")
-        </MudChip>
+        </MudButton>
     }
-</MudChipSet>
+</MudButtonGroup>
 
 @if (_requests is null)
 {

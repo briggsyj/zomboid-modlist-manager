@@ -1,16 +1,17 @@
 @* Rendered inside the MudAppBar. The logout action stays a real form POST because signing out
-   needs HttpContext, which an interactive circuit can't touch after the initial response. *@
+   needs HttpContext, which an interactive circuit can't touch after the initial response.
 
-@* Href must be "/" rather than "": MudButton renders a plain <button> for an empty Href, which
-   silently makes the link do nothing. *@
+   Routes are deliberately unchanged by the renames - /modlist and /admin still work, so existing
+   links and bookmarks don't break. *@
+
 <MudButton Href="/" Variant="Variant.Text" Color="Color.Inherit">Requests</MudButton>
-<MudButton Href="modlist" Variant="Variant.Text" Color="Color.Inherit">Modlist</MudButton>
+<MudButton Href="backlog" Variant="Variant.Text" Color="Color.Inherit">Backlog</MudButton>
+<MudButton Href="modlist" Variant="Variant.Text" Color="Color.Inherit">Active Mods</MudButton>
 <AuthorizeView Context="adminNav">
     <Authorized>
-        <MudButton Href="admin" Variant="Variant.Text" Color="Color.Inherit">Admin</MudButton>
+        <MudButton Href="admin" Variant="Variant.Text" Color="Color.Inherit">Manage</MudButton>
     </Authorized>
 </AuthorizeView>
-<MudButton Href="backlog" Variant="Variant.Text" Color="Color.Inherit">Backlog</MudButton>
 
 <MudSpacer />
 
@@ -21,6 +22,6 @@
         </form>
     </Authorized>
     <NotAuthorized>
-        <MudButton Href="login" Variant="Variant.Text" Color="Color.Inherit">Admin login</MudButton>
+        <MudButton Href="login" Variant="Variant.Text" Color="Color.Inherit">Login</MudButton>
     </NotAuthorized>
 </AuthorizeView>

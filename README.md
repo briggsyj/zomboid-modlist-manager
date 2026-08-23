@@ -27,24 +27,25 @@ approved set is exported as the two semicolon-delimited lists a PZ server config
   their own copy of its fetch status and Mod IDs.
 - **A single password-protected admin** can approve, backlog or decline requests, edit Mod IDs by
   hand, and retry a failed lookup.
-- **Approving adds the Mod to that game's modlist.** If another request for the same Mod is later
-  un-approved, the Mod only leaves the modlist once no approved request references it.
-- **Mods can be parked without being removed.** An admin-only *Active* checkbox on the modlist
-  disables a mod: it stays listed and still downloads, but stops being loaded. See below.
+- **Approving adds the Mod to that game's list of active mods.** If another request for the same
+  Mod is later un-approved, it only drops off once no approved request references it.
+- **Mods can be parked without being removed.** An admin-only *Active* checkbox disables a mod: it
+  stays on record and still downloads, but stops being loaded. See below.
 - Data is stored in SQLite - no external database required.
 
 ### Pages
 
 | Page | Who can see it |
 | --- | --- |
-| `/` - request form + pending requests | everyone |
-| `/modlist` - approved mods for a game | everyone; the export buttons and *Active* toggle are admin-only |
-| `/login` - admin sign-in | everyone |
-| `/admin` - review queue, Mod ID editing, retry fetch | admin only |
+| `/` - **Requests**: request form, pending and backlogged requests | everyone |
+| `/backlog` - **Backlog**: approved-but-switched-off mods, and backlogged requests | everyone |
+| `/modlist` - **Active Mods**: what the server is running | everyone; admins additionally see parked mods, the *Active* toggles, Mod ID editing and the export buttons |
+| `/login` - **Login**: admin sign-in | everyone |
+| `/admin` - **Manage**: review queue, approve/backlog/decline, retry fetch | admin only |
 
 ### Exports
 
-The two buttons on `/modlist` copy a semicolon-delimited list to the clipboard, ready to paste into
+The two buttons on **Active Mods** copy a semicolon-delimited list to the clipboard, ready to paste into
 your server config:
 
 | Button | Contents | Server setting |
@@ -58,7 +59,8 @@ Unticking *Active* on a mod drops its Mod ID from `Mods=` while leaving its work
 `WorkshopItems=`. That's how a Project Zomboid server disables a mod: the item is still downloaded,
 it just isn't loaded - so switching it back on needs no re-download and no player-side re-sync.
 
-Mods are active when first approved, and inactive mods stay visible on the modlist.
+Mods are active when first approved. Parked ones move to the **Backlog** page, where admins and
+visitors alike can see they were accepted but aren't currently running.
 
 ## Tech stack
 
@@ -104,7 +106,7 @@ When a request introduces a new workshop item, a background service resolves its
 2. It extracts every `Mod ID: ...` line from the description.
 
 If the description doesn't state a Mod ID, the fetch is marked failed with an explanation and an
-admin can type the Mod ID in by hand from `/admin` (or hit **Retry fetch**). Requests themselves are
+admin can type the Mod ID in by hand from **Manage** (or hit **Retry fetch**). Requests themselves are
 never blocked by a failed lookup.
 
 ### Optional: SteamCMD
@@ -131,7 +133,7 @@ Or locally, install [SteamCMD](https://developer.valvesoftware.com/wiki/SteamCMD
   `steamapps/workshop/content/108600/<item id>`. This varies by install method, so it has no default.
 
 When SteamCMD is enabled but fails, the app falls back to the API automatically and records why in
-the fetch log shown on `/admin`.
+the fetch log shown on **Manage**.
 
 ### Tests
 
@@ -205,7 +207,7 @@ i386 dependencies have no arm64 build), so an `INSTALL_STEAMCMD=true` image must
 
 ```
 src/ModlistManager/          The Blazor Web App
-  Components/Pages/          Home, Modlist, Login, Admin/Dashboard
+  Components/Pages/          Home, Backlog, Modlist, Login, Admin/Dashboard
   Data/                      EF Core entities, DbContext, migrations
   Services/                  Request logic, Mod ID fetching, parsers
 tests/ModlistManager.Tests/  Unit/integration tests (xUnit)

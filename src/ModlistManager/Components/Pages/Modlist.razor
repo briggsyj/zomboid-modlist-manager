@@ -9,9 +9,9 @@
 @* Public page. Visitors see the mods the server actually loads; admins additionally see parked
    (inactive) mods, the Active toggles, and the export buttons for pasting into server config. *@
 
-<PageTitle>Modlist</PageTitle>
+<PageTitle>Active Mods</PageTitle>
 
-<MudText Typo="Typo.h4" GutterBottom="true">Modlist</MudText>
+<MudText Typo="Typo.h4" GutterBottom="true">Active Mods</MudText>
 <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
     @if (_isAdmin)
     {
@@ -60,7 +60,7 @@
 }
 else if (_mods.Count == 0)
 {
-    <MudAlert Severity="Severity.Normal" Dense="true">No mods on the @_selectedGame modlist yet.</MudAlert>
+    <MudAlert Severity="Severity.Normal" Dense="true">No mods on the @_selectedGame list yet.</MudAlert>
 }
 else
 {
@@ -162,7 +162,7 @@ else
                                         @if (mod.PzModIds.Count == 0)
                                         {
                                             <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                                                None found. Add one from the <MudLink Href="admin">admin page</MudLink>.
+                                                None found. Add one from the <MudLink Href="admin">Manage page</MudLink>.
                                             </MudText>
                                         }
                                         else

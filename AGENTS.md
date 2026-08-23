@@ -10,7 +10,7 @@ See [README.md](README.md) for features and how to run it.
 
 ```
 src/ModlistManager/
-  Components/Pages/   Home (request form + lists), Modlist, Login, Admin/Dashboard
+  Components/Pages/   Home (Requests), Backlog, Modlist (Active Mods), Login, Admin/Dashboard (Manage)
   Data/               EF Core entities, DbContext, migrations
   Services/           Request logic, Mod ID lookup, parsers
 tests/ModlistManager.Tests/
