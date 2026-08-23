@@ -64,101 +64,170 @@ else if (_mods.Count == 0)
 }
 else
 {
-    <MudTable Items="_mods" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
-        <HeaderContent>
-            <AuthorizeView Context="auth">
-                <Authorized><MudTh>Active</MudTh></Authorized>
-            </AuthorizeView>
-            <MudTh>Mod</MudTh>
-            <MudTh>Mod ID</MudTh>
-            <MudTh>Requested by</MudTh>
-            <MudTh>Added</MudTh>
-            <AuthorizeView Context="auth">
-                <Authorized><MudTh>Details</MudTh></Authorized>
-            </AuthorizeView>
-        </HeaderContent>
-        <RowTemplate Context="mod">
-            <AuthorizeView Context="auth">
-                <Authorized>
-                    <MudTd DataLabel="Active">
-                        <MudCheckBox T="bool" Value="mod.IsActive"
-                                     ValueChanged="@(v => SetActiveAsync(mod, v))"
-                                     Color="Color.Primary" Dense="true" />
-                    </MudTd>
-                </Authorized>
-            </AuthorizeView>
-            <MudTd DataLabel="Mod">
-                <MudLink Href="@WorkshopUrl(mod.WorkshopId)" Target="_blank">@mod.DisplayName</MudLink>
-                <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@mod.WorkshopId</MudText>
-            </MudTd>
-            <MudTd DataLabel="Mod ID">
-                <MudText Typo="Typo.body2" Class="font-monospace">
-                    @string.Join(", ", mod.PzModIds.Select(m => m.Value))
-                </MudText>
-            </MudTd>
-            <MudTd DataLabel="Requested by">
-                @string.Join(", ", mod.Requests.Select(r => r.RequesterName).Distinct())
-            </MudTd>
-            <MudTd DataLabel="Added">
-                <MudText Typo="Typo.caption">@(mod.AddedToModlistAtUtc?.ToLocalTime().ToString("g"))</MudText>
-            </MudTd>
-            <AuthorizeView Context="auth">
-                <Authorized>
-                    <MudTd>
-                        <MudIconButton Size="Size.Small"
-                                       Icon="@(IsExpanded(mod.Id) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
-                                       OnClick="@(() => ToggleExpanded(mod.Id))"
-                                       aria-label="@(IsExpanded(mod.Id) ? "Hide details" : "Show details")" />
-                    </MudTd>
-                </Authorized>
-            </AuthorizeView>
-        </RowTemplate>
-        <ChildRowContent Context="mod">
-            @if (_isAdmin && IsExpanded(mod.Id))
-            {
-                <MudTr>
-                    <td colspan="6" class="pa-4" style="background-color: var(--mud-palette-background-grey);">
-                        <MudGrid Spacing="3">
-                            <MudItem xs="12" md="6">
-                                <MudText Typo="Typo.subtitle2" GutterBottom="true">Mod ID lookup</MudText>
-                                <MudText Typo="Typo.body2">
-                                    Source:
-                                    <MudChip T="string" Size="Size.Small" Color="@SourceColor(mod.ModIdSource)">
-                                        @SourceLabel(mod.ModIdSource)
-                                    </MudChip>
-                                </MudText>
-                                <MudText Typo="Typo.body2" Class="mt-1">
-                                    Status:
-                                    <MudChip T="string" Size="Size.Small" Color="@FetchColor(mod.FetchStatus)">
-                                        @mod.FetchStatus
-                                    </MudChip>
-                                </MudText>
-                                @if (!string.IsNullOrWhiteSpace(mod.FetchLog))
-                                {
-                                    <MudText Typo="Typo.caption" Class="d-block mud-text-secondary mt-2"
-                                             Style="white-space: pre-wrap;">@mod.FetchLog</MudText>
-                                }
-                            </MudItem>
+    @* MudSimpleTable rather than MudTable so the <tr> elements are ours to attach drag handlers to;
+       MudTable renders its own rows and won't pass arbitrary attributes through. *@
+    <div class="modlist-scroll">
+        <MudSimpleTable Hover="true" Dense="true" Elevation="1">
+            <thead>
+                <tr>
+                    @if (_isAdmin)
+                    {
+                        <th style="width: 2.5rem;"></th>
+                        <th>Active</th>
+                    }
+                    <th>Mod</th>
+                    <th>Mod ID</th>
+                    <th>Requested by</th>
+                    <th>Added</th>
+                    @if (_isAdmin)
+                    {
+                        <th style="width: 3rem;">Details</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var mod in _mods)
+                {
+                    <tr @key="mod.Id"
+                        draggable="@(_isAdmin ? "true" : "false")"
+                        class="@(_isAdmin ? "modlist-draggable" : null) @(ReferenceEquals(_dragged, mod) ? "modlist-dragging" : null)"
+                        @ondragstart="() => OnDragStart(mod)"
+                        @ondragenter="() => OnDragEnter(mod)"
+                        @ondragover:preventDefault="true"
+                        @ondrop="OnDropAsync"
+                        @ondragend="OnDropAsync">
+                        @if (_isAdmin)
+                        {
+                            <td>
+                                <MudIcon Icon="@Icons.Material.Filled.DragIndicator" Size="Size.Small"
+                                         Class="mud-text-secondary" Title="Drag to reorder" />
+                            </td>
+                            <td>
+                                <MudCheckBox T="bool" Value="mod.IsActive"
+                                             ValueChanged="@(v => SetActiveAsync(mod, v))"
+                                             Color="Color.Primary" Dense="true" />
+                            </td>
+                        }
+                        <td>
+                            <MudLink Href="@WorkshopUrl(mod.WorkshopId)" Target="_blank">@mod.DisplayName</MudLink>
+                            <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@mod.WorkshopId</MudText>
+                        </td>
+                        <td>
+                            @* Only the enabled ones, so this column matches what the export produces. *@
+                            <MudText Typo="Typo.body2" Class="font-monospace">
+                                @string.Join(", ", mod.PzModIds.Where(m => m.IsEnabled).Select(m => m.Value))
+                            </MudText>
+                        </td>
+                        <td>@string.Join(", ", mod.Requests.Select(r => r.RequesterName).Distinct())</td>
+                        <td>
+                            <MudText Typo="Typo.caption">@(mod.AddedToModlistAtUtc?.ToLocalTime().ToString("g"))</MudText>
+                        </td>
+                        @if (_isAdmin)
+                        {
+                            <td>
+                                <MudIconButton Size="Size.Small"
+                                               Icon="@(IsExpanded(mod.Id) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                               OnClick="@(() => ToggleExpanded(mod.Id))"
+                                               aria-label="@(IsExpanded(mod.Id) ? "Hide details" : "Show details")" />
+                            </td>
+                        }
+                    </tr>
 
-                            <MudItem xs="12" md="6">
-                                <MudText Typo="Typo.subtitle2" GutterBottom="true">Admin notes</MudText>
-                                <MudTextField T="string" Value="@GetNoteDraft(mod)"
-                                              ValueChanged="@(v => _noteDrafts[mod.Id] = v ?? string.Empty)"
-                                              Immediate="true" Lines="3" Variant="Variant.Outlined"
-                                              Placeholder="Anything worth remembering about this mod - conflicts, version notes, why it's parked." />
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2"
-                                           OnClick="@(() => SaveNotesAsync(mod))">Save notes</MudButton>
-                                @if (_savedNoteFor == mod.Id)
-                                {
-                                    <MudText Typo="Typo.caption" Color="Color.Success" Class="ml-2">Saved</MudText>
-                                }
-                            </MudItem>
-                        </MudGrid>
-                    </td>
-                </MudTr>
-            }
-        </ChildRowContent>
-    </MudTable>
+                    @if (_isAdmin && IsExpanded(mod.Id))
+                    {
+                        <tr>
+                            <td colspan="7" class="pa-4" style="background-color: var(--mud-palette-background-grey);">
+                                <MudGrid Spacing="3">
+                                    <MudItem xs="12" md="6">
+                                        <MudText Typo="Typo.subtitle2" GutterBottom="true">Mod ID lookup</MudText>
+                                        <MudText Typo="Typo.body2">
+                                            Source:
+                                            <MudChip T="string" Size="Size.Small" Color="@SourceColor(mod.ModIdSource)">
+                                                @SourceLabel(mod.ModIdSource)
+                                            </MudChip>
+                                        </MudText>
+                                        <MudText Typo="Typo.body2" Class="mt-1">
+                                            Status:
+                                            <MudChip T="string" Size="Size.Small" Color="@FetchColor(mod.FetchStatus)">
+                                                @mod.FetchStatus
+                                            </MudChip>
+                                        </MudText>
+                                        @if (!string.IsNullOrWhiteSpace(mod.FetchLog))
+                                        {
+                                            <MudText Typo="Typo.caption" Class="d-block mud-text-secondary mt-2"
+                                                     Style="white-space: pre-wrap;">@mod.FetchLog</MudText>
+                                        }
+
+                                        <MudText Typo="Typo.subtitle2" Class="mt-4" GutterBottom="true">Mod IDs</MudText>
+                                        @if (mod.PzModIds.Count == 0)
+                                        {
+                                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                                None found. Add one from the <MudLink Href="admin">admin page</MudLink>.
+                                            </MudText>
+                                        }
+                                        else
+                                        {
+                                            <MudText Typo="Typo.caption" Class="d-block mud-text-secondary mb-1">
+                                                Unticked IDs stay on record but are left out of the Zomboid Mod IDs export.
+                                            </MudText>
+
+                                            @foreach (var pzModId in mod.PzModIds.OrderBy(p => p.Id))
+                                            {
+                                                <div class="d-flex align-center gap-1" @key="pzModId.Id">
+                                                    <MudCheckBox T="bool" Value="pzModId.IsEnabled"
+                                                                 ValueChanged="@(v => SetModIdEnabledAsync(pzModId, v))"
+                                                                 Color="Color.Primary" Dense="true" />
+
+                                                    @if (_editingPzModId == pzModId.Id)
+                                                    {
+                                                        <MudTextField T="string" @bind-Value="_editDraft" Immediate="true"
+                                                                      Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                                      Class="flex-grow-1" AutoFocus="true"
+                                                                      OnKeyDown="@(e => OnEditKeyDownAsync(e, pzModId))"
+                                                                      OnBlur="@(() => CancelEdit())"
+                                                                      Placeholder="Mod ID, then press Enter" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <MudText Typo="Typo.body2"
+                                                                 Class="@($"font-monospace flex-grow-1 {(pzModId.IsEnabled ? "" : "mud-text-disabled")}")">
+                                                            @pzModId.Value
+                                                        </MudText>
+
+                                                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                                                       OnClick="@(() => BeginEdit(pzModId))"
+                                                                       aria-label="@($"Edit {pzModId.Value}")" />
+                                                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                                                       Color="Color.Error"
+                                                                       OnClick="@(() => DeleteModIdAsync(pzModId))"
+                                                                       aria-label="@($"Delete {pzModId.Value}")" />
+                                                    }
+                                                </div>
+                                            }
+                                        }
+                                    </MudItem>
+
+                                    <MudItem xs="12" md="6">
+                                        <MudText Typo="Typo.subtitle2" GutterBottom="true">Admin notes</MudText>
+                                        <MudTextField T="string" Value="@GetNoteDraft(mod)"
+                                                      ValueChanged="@(v => _noteDrafts[mod.Id] = v ?? string.Empty)"
+                                                      Immediate="true" Lines="3" Variant="Variant.Outlined"
+                                                      Placeholder="Anything worth remembering about this mod - conflicts, version notes, why it's parked." />
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2"
+                                                   OnClick="@(() => SaveNotesAsync(mod))">Save notes</MudButton>
+                                        @if (_savedNoteFor == mod.Id)
+                                        {
+                                            <MudText Typo="Typo.caption" Color="Color.Success" Class="ml-2">Saved</MudText>
+                                        }
+                                    </MudItem>
+                                </MudGrid>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </MudSimpleTable>
+    </div>
 }
 
 @code {
@@ -172,6 +241,10 @@ else
     private bool _isAdmin;
     private IJSObjectReference? _clipboardModule;
     private readonly HashSet<int> _expandedMods = [];
+    private Mod? _dragged;
+    private List<int> _orderAtDragStart = [];
+    private int? _editingPzModId;
+    private string _editDraft = string.Empty;
     private readonly Dictionary<int, string> _noteDrafts = [];
     private int? _savedNoteFor;
 
@@ -248,6 +321,135 @@ else
         var module = await GetClipboardModuleAsync();
         await module.InvokeVoidAsync("copyToClipboard", payload);
         _copiedMessage = string.IsNullOrEmpty(payload) ? emptyMessage : "Copied!";
+    }
+
+    private void OnDragStart(Mod mod)
+    {
+        _dragged = mod;
+        _orderAtDragStart = _mods?.Select(m => m.Id).ToList() ?? [];
+    }
+
+    /// <summary>
+    /// Reorders live as the row is dragged over its neighbours, so the list previews where the mod
+    /// will land. Nothing is saved until the drag finishes.
+    /// </summary>
+    private void OnDragEnter(Mod target)
+    {
+        if (_dragged is null || _mods is null || ReferenceEquals(_dragged, target))
+        {
+            return;
+        }
+
+        var from = _mods.IndexOf(_dragged);
+        var to = _mods.IndexOf(target);
+        if (from < 0 || to < 0)
+        {
+            return;
+        }
+
+        _mods.RemoveAt(from);
+        _mods.Insert(to, _dragged);
+    }
+
+    /// <summary>
+    /// Handles both drop and dragend - dragend also fires when the row is released somewhere that
+    /// isn't a drop target, and without it a reorder previewed on screen would never be saved.
+    /// </summary>
+    private async Task OnDropAsync()
+    {
+        var dragged = _dragged;
+        _dragged = null;
+
+        if (dragged is null || _mods is null)
+        {
+            return;
+        }
+
+        var ids = _mods.Select(m => m.Id).ToList();
+        if (ids.SequenceEqual(_orderAtDragStart))
+        {
+            return;
+        }
+
+        // Same reasoning as the other admin actions: this page is public, so re-check server-side.
+        if (!await IsAdminAsync())
+        {
+            await RefreshAsync();
+            return;
+        }
+
+        await ModRequestService.ReorderModlistAsync(ids);
+        _orderAtDragStart = ids;
+        _copiedMessage = null;
+    }
+
+    private async Task SetModIdEnabledAsync(PzModId pzModId, bool isEnabled)
+    {
+        if (!await IsAdminAsync())
+        {
+            return;
+        }
+
+        await ModRequestService.SetPzModIdEnabledAsync(pzModId.Id, isEnabled);
+        pzModId.IsEnabled = isEnabled;
+        _copiedMessage = null;
+    }
+
+    private async Task DeleteModIdAsync(PzModId pzModId)
+    {
+        if (!await IsAdminAsync())
+        {
+            return;
+        }
+
+        await ModRequestService.DeletePzModIdAsync(pzModId.Id);
+        pzModId.Mod?.PzModIds.Remove(pzModId);
+        _mods?.FirstOrDefault(m => m.Id == pzModId.ModId)?.PzModIds.Remove(pzModId);
+        CancelEdit();
+        _copiedMessage = null;
+    }
+
+    private void BeginEdit(PzModId pzModId)
+    {
+        _editingPzModId = pzModId.Id;
+        _editDraft = pzModId.Value;
+    }
+
+    private void CancelEdit()
+    {
+        _editingPzModId = null;
+        _editDraft = string.Empty;
+    }
+
+    /// <summary>Enter commits the edited Mod ID; Escape abandons it.</summary>
+    private async Task OnEditKeyDownAsync(KeyboardEventArgs args, PzModId pzModId)
+    {
+        if (args.Key == "Escape")
+        {
+            CancelEdit();
+            return;
+        }
+
+        if (args.Key != "Enter" && args.Key != "NumpadEnter")
+        {
+            return;
+        }
+
+        if (!await IsAdminAsync())
+        {
+            CancelEdit();
+            return;
+        }
+
+        var updated = _editDraft;
+        if (await ModRequestService.UpdatePzModIdValueAsync(pzModId.Id, updated))
+        {
+            pzModId.Value = updated.Trim();
+            pzModId.IsManual = true;
+            _copiedMessage = null;
+        }
+
+        CancelEdit();
     }
 
     private bool IsExpanded(int modId) => _expandedMods.Contains(modId);

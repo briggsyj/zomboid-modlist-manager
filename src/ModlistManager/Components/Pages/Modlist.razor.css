@@ -1,0 +1,17 @@
+/* A wide table on a narrow screen scrolls rather than pushing the page sideways. */
+.modlist-scroll {
+    overflow-x: auto;
+}
+
+.modlist-draggable {
+    cursor: grab;
+}
+
+.modlist-draggable:active {
+    cursor: grabbing;
+}
+
+/* The row being dragged, so it's clear which one is moving. */
+.modlist-dragging {
+    opacity: 0.45;
+}

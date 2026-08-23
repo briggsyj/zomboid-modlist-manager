@@ -70,14 +70,14 @@ else
 
                 @foreach (var modId in mod.PzModIds)
                 {
+                    @* Read-only here: editing, enabling and deleting Mod IDs all live on the
+                       modlist page's details panel, so there's one place that does it. *@
                     <div class="d-flex align-center gap-1 mt-1">
                         <MudText Typo="Typo.body2" Class="font-monospace">@modId.Value</MudText>
                         @if (modId.IsManual)
                         {
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">manual</MudChip>
                         }
-                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
-                                       OnClick="() => DeletePzModIdAsync(modId.Id)" aria-label="Remove mod ID" />
                     </div>
                 }
 
@@ -192,12 +192,6 @@ else
 
         await ModRequestService.AddManualModIdAsync(modId, value, null);
         _pendingModId[modId] = string.Empty;
-        await RefreshAsync();
-    }
-
-    private async Task DeletePzModIdAsync(int pzModIdId)
-    {
-        await ModRequestService.DeletePzModIdAsync(pzModIdId);
         await RefreshAsync();
     }
 
