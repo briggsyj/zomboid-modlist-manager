@@ -1,7 +1,6 @@
 @* /admin is kept alongside the renamed route so existing links and bookmarks still resolve. *@
 @page "/manage"
 @page "/admin"
-@rendermode InteractiveServer
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using ModlistManager.Data.Entities
@@ -53,15 +52,26 @@ else
         <ItemRenderer>
             <MudCard Elevation="2" Class="mb-2 kanban-card">
                 <MudCardContent Class="pa-3">
-                    <MudLink Href="@WorkshopUrl(context.Mod!.WorkshopId)" Target="_blank" Typo="Typo.body1">
-                        @context.Mod!.DisplayName
-                    </MudLink>
-                    <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">
-                        Requested by @context.RequesterName
-                    </MudText>
+                    @* Icon button + MudCollapse rather than an expansion panel: no "Details" title
+                       bar taking up space on an already-small card. *@
+                    <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="1">
+                        <div class="flex-grow-1">
+                            <MudLink Href="@WorkshopUrl(context.Mod!.WorkshopId)" Target="_blank" Typo="Typo.body1">
+                                @context.Mod!.DisplayName
+                            </MudLink>
+                            <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">
+                                Requested by @context.RequesterName
+                            </MudText>
+                        </div>
 
-                    <MudExpansionPanels Elevation="0" Dense="true" Class="mt-2">
-                        <MudExpansionPanel Text="Details">
+                        <MudIconButton Size="Size.Small"
+                                       Icon="@(IsExpanded(context.Id) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                       OnClick="@(() => ToggleExpanded(context.Id))"
+                                       aria-label="@(IsExpanded(context.Id) ? "Hide details" : "Show details")" />
+                    </MudStack>
+
+                    <MudCollapse Expanded="@IsExpanded(context.Id)">
+                        <div class="mt-2">
                             @if (!string.IsNullOrWhiteSpace(context.Reason))
                             {
                                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Reason</MudText>
@@ -100,8 +110,8 @@ else
                                     </MudText>
                                 }
                             }
-                        </MudExpansionPanel>
-                    </MudExpansionPanels>
+                        </div>
+                    </MudCollapse>
                 </MudCardContent>
             </MudCard>
         </ItemRenderer>
@@ -119,6 +129,7 @@ else
         new(RequestStatus.Declined, "Declined", Color.Error)
     ];
 
+    private readonly HashSet<int> _expandedRequests = [];
     private List<ModRequest>? _requests;
     private MudDropContainer<ModRequest>? _dropContainer;
     private CancellationTokenSource? _pollCts;
@@ -152,6 +163,20 @@ else
 
         request.Status = newStatus;
         await ModRequestService.SetStatusAsync(request.Id, newStatus);
+        _dropContainer?.Refresh();
+    }
+
+    private bool IsExpanded(int requestId) => _expandedRequests.Contains(requestId);
+
+    private void ToggleExpanded(int requestId)
+    {
+        if (!_expandedRequests.Remove(requestId))
+        {
+            _expandedRequests.Add(requestId);
+        }
+
+        // MudDropContainer renders its items through ItemRenderer and won't re-render them just
+        // because page state changed, so the card would keep its old collapsed/expanded markup.
         _dropContainer?.Refresh();
     }
 

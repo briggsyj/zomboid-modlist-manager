@@ -1,7 +1,6 @@
 @* /modlist is kept alongside the renamed route so existing links and bookmarks still resolve. *@
 @page "/active-mods"
 @page "/modlist"
-@rendermode InteractiveServer
 @using ModlistManager.Data.Entities
 @using ModlistManager.Services
 @inject ModRequestService ModRequestService
@@ -18,28 +17,36 @@
     Mods currently running on the server. Want something added? <MudLink Href="/">Make a request</MudLink>.
 </MudText>
 
-<MudSelect T="string" Value="_selectedGame" ValueChanged="OnGameChangedAsync" Label="Game"
-           Variant="Variant.Outlined" Dense="true" Class="mb-4" Style="max-width: 22rem;">
-    @foreach (var game in _games)
-    {
-        <MudSelectItem T="string" Value="@game">@game</MudSelectItem>
-    }
-</MudSelect>
+@* Game picker on the left, exports pushed to the right on the same line. *@
+<MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4 flex-wrap">
+    <MudSelect T="string" Value="_selectedGame" ValueChanged="OnGameChangedAsync" Label="Game"
+               Variant="Variant.Outlined" Dense="true" Style="max-width: 22rem;">
+        @foreach (var game in _games)
+        {
+            <MudSelectItem T="string" Value="@game">@game</MudSelectItem>
+        }
+    </MudSelect>
 
-<AuthorizeView>
-    <Authorized>
-        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-4 flex-wrap">
+    <MudSpacer />
+
+    <AuthorizeView Context="exportAuth">
+        <Authorized>
+            @if (_copiedMessage is not null)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Success">@_copiedMessage</MudText>
+            }
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CopyWorkshopIdsAsync">
                 Copy Workshop IDs
             </MudButton>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CopyZomboidModIdsAsync">
                 Copy Zomboid Mod IDs
             </MudButton>
-            @if (_copiedMessage is not null)
-            {
-                <MudText Typo="Typo.body2" Color="Color.Success">@_copiedMessage</MudText>
-            }
-        </MudStack>
+        </Authorized>
+    </AuthorizeView>
+</MudStack>
+
+<AuthorizeView>
+    <Authorized>
         <MudText Typo="Typo.caption" Class="d-block mb-4 mud-text-secondary">
             Unticking <em>Active</em> moves a mod to <em>Temporarily disabled</em> below: it stays in the
             Workshop IDs export so the server still downloads it, but drops out of the Zomboid Mod IDs
@@ -71,6 +78,11 @@
                         <th>Requested by</th>
                     }
                     <th>Added</th>
+                    @if (_isAdmin)
+                    {
+                        @* Unlabelled: the expander speaks for itself. *@
+                        <th style="width: 3rem;"></th>
+                    }
                 </tr>
             </thead>
             <tbody>
@@ -117,19 +129,28 @@
                         <td>
                             <MudText Typo="Typo.caption">@(mod.AddedToModlistAtUtc?.ToLocalTime().ToString("g"))</MudText>
                         </td>
+                        @if (_isAdmin)
+                        {
+                            <td class="text-right">
+                                <MudIconButton Size="Size.Small"
+                                               Icon="@(IsExpanded(mod.Id) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                               OnClick="@(() => ToggleExpanded(mod.Id))"
+                                               aria-label="@(IsExpanded(mod.Id) ? "Hide details" : "Show details")" />
+                            </td>
+                        }
                     </tr>
 
                     @if (_isAdmin)
                     {
-                        @* MudExpansionPanel handles its own expand/collapse, so there's no
-                           expanded-row state for the page to track. *@
+                        @* MudCollapse rather than MudExpansionPanel: the trigger is the button in the
+                           row above, and an expansion panel would insist on rendering its own header. *@
                         <tr class="modlist-details-row">
-                            <td colspan="6" class="pa-0">
-                                <MudExpansionPanels Elevation="0" Dense="true">
-                                    <MudExpansionPanel Text="Details">
+                            <td colspan="7" class="pa-0">
+                                <MudCollapse Expanded="@IsExpanded(mod.Id)">
+                                    <div class="pa-4" style="background-color: var(--mud-palette-background-grey);">
                                         <ModDetailsPanel Mod="mod" OnChanged="OnDetailsChangedAsync" />
-                                    </MudExpansionPanel>
-                                </MudExpansionPanels>
+                                    </div>
+                                </MudCollapse>
                             </td>
                         </tr>
                     }
@@ -178,6 +199,7 @@ else
     private string? _copiedMessage;
     private bool _isAdmin;
     private IJSObjectReference? _clipboardModule;
+    private readonly HashSet<int> _expandedMods = [];
     private Mod? _dragged;
     private List<int> _orderAtDragStart = [];
 
@@ -328,6 +350,16 @@ else
         await ModRequestService.ReorderModlistAsync(ids);
         _orderAtDragStart = ids;
         _copiedMessage = null;
+    }
+
+    private bool IsExpanded(int modId) => _expandedMods.Contains(modId);
+
+    private void ToggleExpanded(int modId)
+    {
+        if (!_expandedMods.Remove(modId))
+        {
+            _expandedMods.Add(modId);
+        }
     }
 
     private static string WorkshopUrl(string workshopId) =>
