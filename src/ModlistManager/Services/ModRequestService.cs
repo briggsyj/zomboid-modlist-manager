@@ -298,6 +298,15 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
         }
 
         await using var db = await dbContextFactory.CreateDbContextAsync();
+
+        // A duplicate would be emitted twice in the Mods= line, so ignore it rather than storing it.
+        var alreadyPresent = await db.PzModIds
+            .AnyAsync(p => p.ModId == modId && p.Value == modIdValue);
+        if (alreadyPresent)
+        {
+            return;
+        }
+
         db.PzModIds.Add(new PzModId
         {
             ModId = modId,
@@ -319,6 +328,61 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
 
         db.PzModIds.Remove(entry);
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Includes or excludes a single Mod ID from the Mods= export, without deleting it - useful when
+    /// a workshop item bundles several mods and only some are wanted.
+    /// </summary>
+    public async Task SetPzModIdEnabledAsync(int pzModIdId, bool isEnabled)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        var entry = await db.PzModIds.FirstOrDefaultAsync(m => m.Id == pzModIdId);
+        if (entry is null)
+        {
+            return;
+        }
+
+        entry.IsEnabled = isEnabled;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Corrects a Mod ID's value - the automatic lookup can read a stale or wrong one from a
+    /// workshop description. A blank value is ignored rather than wiping the entry; deleting is a
+    /// separate, explicit action.
+    /// </summary>
+    /// <returns>True if the value changed.</returns>
+    public async Task<bool> UpdatePzModIdValueAsync(int pzModIdId, string? newValue)
+    {
+        newValue = newValue?.Trim();
+        if (string.IsNullOrEmpty(newValue))
+        {
+            return false;
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        var entry = await db.PzModIds.FirstOrDefaultAsync(m => m.Id == pzModIdId);
+        if (entry is null || string.Equals(entry.Value, newValue, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Renaming onto a value the same mod already carries would duplicate it in the export.
+        var wouldDuplicate = await db.PzModIds
+            .AnyAsync(p => p.ModId == entry.ModId && p.Id != entry.Id && p.Value == newValue);
+        if (wouldDuplicate)
+        {
+            return false;
+        }
+
+        entry.Value = newValue;
+
+        // Hand-corrected, so a later re-fetch shouldn't quietly overwrite it - the fetch only
+        // replaces entries it discovered itself.
+        entry.IsManual = true;
+        await db.SaveChangesAsync();
+        return true;
     }
 
     /// <summary>
@@ -377,7 +441,8 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
     ///
     /// Follows the admin-defined modlist order, matching the WorkshopItems= export. Load order is
     /// significant in Project Zomboid, so this is the order the server will apply. A workshop item
-    /// bundling several mods contributes its Mod IDs together, in the order they were discovered.
+    /// bundling several mods contributes its Mod IDs together, in the order they were discovered -
+    /// minus any an admin has unticked.
     /// </summary>
     public async Task<string> BuildApprovedZomboidModIdExportAsync()
     {
@@ -389,7 +454,10 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
             .ThenBy(m => m.Id)
             .ToListAsync();
 
-        var modIds = mods.SelectMany(m => m.PzModIds.OrderBy(p => p.Id).Select(p => p.Value));
+        var modIds = mods.SelectMany(m => m.PzModIds
+            .Where(p => p.IsEnabled)
+            .OrderBy(p => p.Id)
+            .Select(p => p.Value));
 
         return string.Join(';', modIds.Select(id => $"\\{id}"));
     }

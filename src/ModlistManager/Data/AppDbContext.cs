@@ -39,6 +39,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        // Same reasoning as Mod.IsActive: without a true default, every Mod ID that predates this
+        // column would drop out of the Mods= export on upgrade.
+        modelBuilder.Entity<PzModId>()
+            .Property(p => p.IsEnabled)
+            .HasDefaultValue(true);
+
         modelBuilder.Entity<ModRequest>(entity =>
         {
             entity.Property(r => r.Status).HasConversion<string>();

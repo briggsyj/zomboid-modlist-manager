@@ -19,4 +19,11 @@ public class PzModId
 
     /// <summary>False when discovered automatically via SteamCMD/mod.info; true when entered by an admin.</summary>
     public bool IsManual { get; set; }
+
+    /// <summary>
+    /// Whether this particular Mod ID goes into the Mods= export. A workshop item can bundle several
+    /// mods where only some are wanted, so they're toggled individually - separate from Mod.IsActive,
+    /// which switches the whole item off.
+    /// </summary>
+    public bool IsEnabled { get; set; } = true;
 }
