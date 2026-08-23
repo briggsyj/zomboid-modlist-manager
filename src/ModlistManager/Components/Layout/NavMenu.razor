@@ -5,13 +5,17 @@
    silently makes the link do nothing. *@
 <MudButton Href="/" Variant="Variant.Text" Color="Color.Inherit">Requests</MudButton>
 <MudButton Href="modlist" Variant="Variant.Text" Color="Color.Inherit">Modlist</MudButton>
+<AuthorizeView Context="adminNav">
+    <Authorized>
+        <MudButton Href="admin" Variant="Variant.Text" Color="Color.Inherit">Admin</MudButton>
+    </Authorized>
+</AuthorizeView>
 <MudButton Href="backlog" Variant="Variant.Text" Color="Color.Inherit">Backlog</MudButton>
 
 <MudSpacer />
 
 <AuthorizeView>
     <Authorized>
-        <MudButton Href="admin" Variant="Variant.Text" Color="Color.Inherit">Admin</MudButton>
         <form method="post" action="/account/logout" class="d-inline">
             <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Text" Color="Color.Inherit">Log out</MudButton>
         </form>
