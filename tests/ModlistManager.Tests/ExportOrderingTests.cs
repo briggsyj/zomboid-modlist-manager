@@ -157,9 +157,19 @@ public class ExportOrderingTests : IDisposable
         var b = await ApproveAsync("222", "BMod");
         await _service.ReorderModlistAsync([b, a]);
 
-        // A second request for the same mod, also approved, must not shunt it to the end.
-        var second = await _service.CreateRequestAsync("111", "bob");
-        await _service.SetStatusAsync(second.RequestId!.Value, RequestStatus.Approved);
+        // A second request for the same mod, also approved, must not shunt it to the end. The
+        // service refuses to create duplicates now, so seed one the way an older database would.
+        int secondId;
+        await using (var db = _dbFactory.CreateDbContext())
+        {
+            var mod = db.Mods.Single(m => m.WorkshopId == "111");
+            var extra = new ModRequest { ModId = mod.Id, RequesterName = "bob", Status = RequestStatus.Pending };
+            db.ModRequests.Add(extra);
+            await db.SaveChangesAsync();
+            secondId = extra.Id;
+        }
+
+        await _service.SetStatusAsync(secondId, RequestStatus.Approved);
 
         Assert.Equal("222;111", await _service.BuildApprovedWorkshopIdExportAsync());
     }

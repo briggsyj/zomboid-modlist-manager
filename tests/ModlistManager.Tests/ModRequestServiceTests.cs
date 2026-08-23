@@ -17,6 +17,21 @@ public class ModRequestServiceTests : IDisposable
     private async Task<ModRequest> GetRequestAsync(int requestId) =>
         (await _service.GetRequestsAsync()).Single(r => r.Id == requestId);
 
+    /// <summary>
+    /// Adds a second request against an existing mod straight through the DbContext. The service now
+    /// refuses to create one, but databases predating that rule still contain them, so the logic
+    /// that copes with several requests per mod still needs covering.
+    /// </summary>
+    private async Task<int> AddLegacyDuplicateRequestAsync(string workshopId, string requesterName)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var mod = db.Mods.Single(m => m.WorkshopId == workshopId);
+        var request = new ModRequest { ModId = mod.Id, RequesterName = requesterName, Status = RequestStatus.Pending };
+        db.ModRequests.Add(request);
+        await db.SaveChangesAsync();
+        return request.Id;
+    }
+
     [Fact]
     public async Task CreateRequestAsync_NormalizesNameAndParsesWorkshopId()
     {
@@ -75,14 +90,36 @@ public class ModRequestServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task CreateRequestAsync_ReusesExistingModForSameWorkshopIdAndGame()
+    public async Task CreateRequestAsync_RejectsASecondRequestForTheSameWorkshopItem()
+    {
+        await _service.CreateRequestAsync("3783094058", "Alice");
+
+        var second = await _service.CreateRequestAsync("3783094058", "Bob");
+
+        Assert.False(second.Success);
+        Assert.Contains("already been requested", second.Error);
+        Assert.Single(await _service.GetRequestsAsync());
+    }
+
+    [Fact]
+    public async Task CreateRequestAsync_RejectsADuplicateGivenAsAUrlRatherThanAnId()
+    {
+        await _service.CreateRequestAsync("3783094058", "Alice");
+
+        var second = await _service.CreateRequestAsync(
+            "https://steamcommunity.com/sharedfiles/filedetails/?id=3783094058", "Bob");
+
+        Assert.False(second.Success);
+    }
+
+    [Fact]
+    public async Task CreateRequestAsync_AllowsTheSameWorkshopItemForADifferentGame()
     {
         await _service.CreateRequestAsync("111", "Alice");
-        await _service.CreateRequestAsync("111", "Bob");
 
-        var requests = await _service.GetRequestsAsync();
-        Assert.Equal(2, requests.Count);
-        Assert.Equal(requests[0].ModId, requests[1].ModId);
+        var other = await _service.CreateRequestAsync("111", "Bob", game: "Some Other Game");
+
+        Assert.True(other.Success);
     }
 
     [Fact]
@@ -115,10 +152,10 @@ public class ModRequestServiceTests : IDisposable
     public async Task SetStatusAsync_TwoRequestsForSameMod_ApprovingEitherKeepsOneModlistEntry()
     {
         var a = await _service.CreateRequestAsync("111", "Alice");
-        var b = await _service.CreateRequestAsync("111", "Bob");
+        var b = await AddLegacyDuplicateRequestAsync("111", "bob");
 
         await _service.SetStatusAsync(a.RequestId!.Value, RequestStatus.Approved);
-        await _service.SetStatusAsync(b.RequestId!.Value, RequestStatus.Approved);
+        await _service.SetStatusAsync(b, RequestStatus.Approved);
 
         var modlist = await _service.GetModlistAsync();
         Assert.Single(modlist);
@@ -139,9 +176,9 @@ public class ModRequestServiceTests : IDisposable
     public async Task SetStatusAsync_UnapprovingOneOfTwoRequests_KeepsModOnModlist()
     {
         var a = await _service.CreateRequestAsync("111", "Alice");
-        var b = await _service.CreateRequestAsync("111", "Bob");
+        var b = await AddLegacyDuplicateRequestAsync("111", "bob");
         await _service.SetStatusAsync(a.RequestId!.Value, RequestStatus.Approved);
-        await _service.SetStatusAsync(b.RequestId!.Value, RequestStatus.Approved);
+        await _service.SetStatusAsync(b, RequestStatus.Approved);
 
         await _service.SetStatusAsync(a.RequestId!.Value, RequestStatus.Declined);
 

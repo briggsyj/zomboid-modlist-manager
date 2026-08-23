@@ -106,7 +106,7 @@ app.MapPost("/account/login", async (HttpContext ctx, AdminAuthService auth) =>
             [new Claim(ClaimTypes.Name, "admin")],
             CookieAuthenticationDefaults.AuthenticationScheme);
         await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
-        return Results.LocalRedirect("/admin");
+        return Results.LocalRedirect("/manage");
     }
 
     return Results.LocalRedirect("/login?error=1");

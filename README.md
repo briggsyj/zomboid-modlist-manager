@@ -39,9 +39,9 @@ approved set is exported as the two semicolon-delimited lists a PZ server config
 | --- | --- |
 | `/` - **Requests**: request form, pending and backlogged requests | everyone |
 | `/backlog` - **Backlog**: requests kept for later | everyone |
-| `/modlist` - **Active Mods**: what the server is running, plus a *Temporarily disabled* list | everyone; admins additionally get the *Active* toggles, drag-reordering, Mod ID editing and the export buttons |
+| `/active-mods` - **Active Mods**: what the server is running, plus a *Temporarily disabled* list | everyone; admins additionally get the *Active* toggles, drag-reordering, Mod ID editing and the export buttons |
 | `/login` - **Login**: admin sign-in | everyone |
-| `/admin` - **Manage**: review queue, approve/backlog/decline, retry fetch | admin only |
+| `/manage` - **Manage**: review queue, approve/backlog/decline, retry fetch | admin only |
 
 ### Exports
 
