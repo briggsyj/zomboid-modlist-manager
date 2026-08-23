@@ -4,62 +4,14 @@
 @using ModlistManager.Services
 @inject ModRequestService ModRequestService
 
-@* Everything that isn't currently running but hasn't been turned down: mods an admin approved then
-   switched off, and requests parked for later. The modlist page is the counterpart - it shows only
-   what the server actually loads. *@
+@* Requests an admin has parked for later. Approved-but-switched-off mods used to live here too;
+   they're now under "Temporarily disabled" on the Active Mods page, next to the toggle that
+   controls them. *@
 
 <PageTitle>Backlog</PageTitle>
 
 <MudText Typo="Typo.h4" GutterBottom="true">Backlog</MudText>
-<MudText Typo="Typo.body2" Class="mb-6 mud-text-secondary">
-    Not running on the server right now &mdash; but not rejected either. Mods currently in use are
-    under <MudLink Href="modlist">Active Mods</MudLink>.
-</MudText>
-
-<MudText Typo="Typo.h6">Approved but switched off</MudText>
-<MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
-    Accepted onto the server at some point, then disabled. Still downloaded, just not loaded.
-</MudText>
-
-@if (_parkedMods is null)
-{
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
-}
-else if (_parkedMods.Count == 0)
-{
-    <MudAlert Severity="Severity.Normal" Dense="true">Nothing approved is switched off.</MudAlert>
-}
-else
-{
-    <MudTable Items="_parkedMods" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
-        <HeaderContent>
-            <MudTh>Mod</MudTh>
-            <MudTh>Mod ID</MudTh>
-            <MudTh>Requested by</MudTh>
-            <MudTh>Added</MudTh>
-        </HeaderContent>
-        <RowTemplate Context="mod">
-            <MudTd DataLabel="Mod">
-                <MudLink Href="@WorkshopUrl(mod.WorkshopId)" Target="_blank">@mod.DisplayName</MudLink>
-                <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@mod.WorkshopId</MudText>
-            </MudTd>
-            <MudTd DataLabel="Mod ID">
-                <MudText Typo="Typo.body2" Class="font-monospace">
-                    @string.Join(", ", mod.PzModIds.Select(m => m.Value))
-                </MudText>
-            </MudTd>
-            <MudTd DataLabel="Requested by">
-                @string.Join(", ", mod.Requests.Select(r => r.RequesterName).Distinct())
-            </MudTd>
-            <MudTd DataLabel="Added">
-                <MudText Typo="Typo.caption">@(mod.AddedToModlistAtUtc?.ToLocalTime().ToString("g"))</MudText>
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
-}
-
-<MudText Typo="Typo.h6" Class="mt-8">Backlogged requests</MudText>
-<MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
     Reviewed and kept for later &mdash; no need to request these again.
 </MudText>
 
@@ -74,15 +26,8 @@ else
 }
 
 @code {
-    private List<Mod>? _parkedMods;
     private List<ModRequest>? _backloggedRequests;
 
-    protected override async Task OnInitializedAsync()
-    {
-        _parkedMods = await ModRequestService.GetParkedModsAsync();
+    protected override async Task OnInitializedAsync() =>
         _backloggedRequests = await ModRequestService.GetRequestsByStatusAsync(RequestStatus.Backlogged);
-    }
-
-    private static string WorkshopUrl(string workshopId) =>
-        $"https://steamcommunity.com/sharedfiles/filedetails/?id={workshopId}";
 }

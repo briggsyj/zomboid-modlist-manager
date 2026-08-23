@@ -38,8 +38,8 @@ approved set is exported as the two semicolon-delimited lists a PZ server config
 | Page | Who can see it |
 | --- | --- |
 | `/` - **Requests**: request form, pending and backlogged requests | everyone |
-| `/backlog` - **Backlog**: approved-but-switched-off mods, and backlogged requests | everyone |
-| `/modlist` - **Active Mods**: what the server is running | everyone; admins additionally see parked mods, the *Active* toggles, Mod ID editing and the export buttons |
+| `/backlog` - **Backlog**: requests kept for later | everyone |
+| `/modlist` - **Active Mods**: what the server is running, plus a *Temporarily disabled* list | everyone; admins additionally get the *Active* toggles, drag-reordering, Mod ID editing and the export buttons |
 | `/login` - **Login**: admin sign-in | everyone |
 | `/admin` - **Manage**: review queue, approve/backlog/decline, retry fetch | admin only |
 
@@ -59,8 +59,9 @@ Unticking *Active* on a mod drops its Mod ID from `Mods=` while leaving its work
 `WorkshopItems=`. That's how a Project Zomboid server disables a mod: the item is still downloaded,
 it just isn't loaded - so switching it back on needs no re-download and no player-side re-sync.
 
-Mods are active when first approved. Parked ones move to the **Backlog** page, where admins and
-visitors alike can see they were accepted but aren't currently running.
+Mods are active when first approved. Disabling one moves it to the **Temporarily disabled** list at
+the bottom of **Active Mods**, so it's still visible - and re-enabled - next to the toggle that
+controls it.
 
 ## Tech stack
 

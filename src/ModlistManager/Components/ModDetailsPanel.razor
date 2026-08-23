@@ -1,0 +1,225 @@
+@* Admin-only detail for one mod: where its Mod ID came from, the Mod IDs themselves (toggle, edit,
+   delete) and free-text notes. Shared by the Active Mods and Temporarily disabled lists.
+
+   Self-contained on purpose - it owns its own edit state and re-checks auth server-side before
+   every write, because the page hosting it is public. *@
+
+@using ModlistManager.Data.Entities
+@using ModlistManager.Services
+@inject ModRequestService ModRequestService
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="6">
+        <MudText Typo="Typo.subtitle2" GutterBottom="true">Mod ID lookup</MudText>
+        <MudText Typo="Typo.body2">
+            Source:
+            <MudChip T="string" Size="Size.Small" Color="@SourceColor(Mod.ModIdSource)">
+                @SourceLabel(Mod.ModIdSource)
+            </MudChip>
+        </MudText>
+        <MudText Typo="Typo.body2" Class="mt-1">
+            Status:
+            <MudChip T="string" Size="Size.Small" Color="@FetchColor(Mod.FetchStatus)">@Mod.FetchStatus</MudChip>
+        </MudText>
+        @if (!string.IsNullOrWhiteSpace(Mod.FetchLog))
+        {
+            <MudText Typo="Typo.caption" Class="d-block mud-text-secondary mt-2"
+                     Style="white-space: pre-wrap;">@Mod.FetchLog</MudText>
+        }
+
+        <MudText Typo="Typo.subtitle2" Class="mt-4" GutterBottom="true">Mod IDs</MudText>
+        @if (Mod.PzModIds.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                None found. Add one from the <MudLink Href="admin">Manage page</MudLink>.
+            </MudText>
+        }
+        else
+        {
+            <MudText Typo="Typo.caption" Class="d-block mud-text-secondary mb-1">
+                Unticked IDs stay on record but are left out of the Zomboid Mod IDs export.
+            </MudText>
+
+            @foreach (var pzModId in Mod.PzModIds.OrderBy(p => p.Id))
+            {
+                <div class="d-flex align-center gap-1" @key="pzModId.Id">
+                    <MudCheckBox T="bool" Value="pzModId.IsEnabled"
+                                 ValueChanged="@(v => SetModIdEnabledAsync(pzModId, v))"
+                                 Color="Color.Primary" Dense="true" />
+
+                    @if (_editingPzModId == pzModId.Id)
+                    {
+                        <MudTextField T="string" @bind-Value="_editDraft" Immediate="true"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      Class="flex-grow-1" AutoFocus="true"
+                                      OnKeyDown="@(e => OnEditKeyDownAsync(e, pzModId))"
+                                      OnBlur="@(() => CancelEdit())"
+                                      Placeholder="Mod ID, then press Enter" />
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2"
+                                 Class="@($"font-monospace flex-grow-1 {(pzModId.IsEnabled ? "" : "mud-text-disabled")}")">
+                            @pzModId.Value
+                        </MudText>
+
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                       OnClick="@(() => BeginEdit(pzModId))"
+                                       aria-label="@($"Edit {pzModId.Value}")" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => DeleteModIdAsync(pzModId))"
+                                       aria-label="@($"Delete {pzModId.Value}")" />
+                    }
+                </div>
+            }
+        }
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudText Typo="Typo.subtitle2" GutterBottom="true">Admin notes</MudText>
+        <MudTextField T="string" Value="@(_noteDraft ?? Mod.AdminNotes ?? string.Empty)"
+                      ValueChanged="@(v => _noteDraft = v ?? string.Empty)"
+                      Immediate="true" Lines="3" Variant="Variant.Outlined"
+                      Placeholder="Anything worth remembering about this mod - conflicts, version notes, why it's disabled." />
+        <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2" OnClick="SaveNotesAsync">
+            Save notes
+        </MudButton>
+        @if (_notesSaved)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Success" Class="ml-2">Saved</MudText>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    [Parameter, EditorRequired]
+    public Mod Mod { get; set; } = default!;
+
+    /// <summary>Raised after any change that affects the exports, so the page can clear stale UI.</summary>
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private int? _editingPzModId;
+    private string _editDraft = string.Empty;
+    private string? _noteDraft;
+    private bool _notesSaved;
+
+    private async Task<bool> IsAdminAsync()
+    {
+        if (AuthenticationStateTask is null)
+        {
+            return false;
+        }
+
+        var state = await AuthenticationStateTask;
+        return state.User.Identity?.IsAuthenticated == true;
+    }
+
+    private async Task SetModIdEnabledAsync(PzModId pzModId, bool isEnabled)
+    {
+        if (!await IsAdminAsync())
+        {
+            return;
+        }
+
+        await ModRequestService.SetPzModIdEnabledAsync(pzModId.Id, isEnabled);
+        pzModId.IsEnabled = isEnabled;
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task DeleteModIdAsync(PzModId pzModId)
+    {
+        if (!await IsAdminAsync())
+        {
+            return;
+        }
+
+        await ModRequestService.DeletePzModIdAsync(pzModId.Id);
+        Mod.PzModIds.Remove(pzModId);
+        CancelEdit();
+        await OnChanged.InvokeAsync();
+    }
+
+    private void BeginEdit(PzModId pzModId)
+    {
+        _editingPzModId = pzModId.Id;
+        _editDraft = pzModId.Value;
+    }
+
+    private void CancelEdit()
+    {
+        _editingPzModId = null;
+        _editDraft = string.Empty;
+    }
+
+    /// <summary>Enter commits the edited Mod ID; Escape abandons it.</summary>
+    private async Task OnEditKeyDownAsync(KeyboardEventArgs args, PzModId pzModId)
+    {
+        if (args.Key == "Escape")
+        {
+            CancelEdit();
+            return;
+        }
+
+        if (args.Key != "Enter" && args.Key != "NumpadEnter")
+        {
+            return;
+        }
+
+        if (!await IsAdminAsync())
+        {
+            CancelEdit();
+            return;
+        }
+
+        var updated = _editDraft;
+        if (await ModRequestService.UpdatePzModIdValueAsync(pzModId.Id, updated))
+        {
+            pzModId.Value = updated.Trim();
+            pzModId.IsManual = true;
+            await OnChanged.InvokeAsync();
+        }
+
+        CancelEdit();
+    }
+
+    private async Task SaveNotesAsync()
+    {
+        if (!await IsAdminAsync())
+        {
+            return;
+        }
+
+        var notes = _noteDraft ?? Mod.AdminNotes ?? string.Empty;
+        await ModRequestService.SetModAdminNotesAsync(Mod.Id, notes);
+        Mod.AdminNotes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        _notesSaved = true;
+        await OnChanged.InvokeAsync();
+    }
+
+    private static string SourceLabel(ModIdSource source) => source switch
+    {
+        ModIdSource.SteamCmd => "SteamCMD (mod.info)",
+        ModIdSource.SteamWorkshopApi => "Workshop API (description)",
+        _ => "Not resolved"
+    };
+
+    private static Color SourceColor(ModIdSource source) => source switch
+    {
+        // SteamCMD reads the file the game itself loads, so it's the more trustworthy of the two.
+        ModIdSource.SteamCmd => Color.Success,
+        ModIdSource.SteamWorkshopApi => Color.Info,
+        _ => Color.Default
+    };
+
+    private static Color FetchColor(ModIdFetchStatus status) => status switch
+    {
+        ModIdFetchStatus.Completed => Color.Success,
+        ModIdFetchStatus.Processing => Color.Info,
+        ModIdFetchStatus.Failed => Color.Error,
+        _ => Color.Default
+    };
+}
