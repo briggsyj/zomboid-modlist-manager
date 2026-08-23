@@ -18,6 +18,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Mod>(entity =>
         {
             entity.Property(m => m.FetchStatus).HasConversion<string>();
+            // Default to the enum name, not "" - existing rows must round-trip back into the enum.
+            entity.Property(m => m.ModIdSource)
+                .HasConversion<string>()
+                .HasDefaultValue(ModIdSource.Unknown);
             entity.HasIndex(m => new { m.Game, m.WorkshopId }).IsUnique();
 
             // Default true so mods added before this column existed stay in the Mods= export

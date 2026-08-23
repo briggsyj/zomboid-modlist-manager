@@ -249,6 +249,20 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
         await db.SaveChangesAsync();
     }
 
+    /// <summary>Saves an admin's free-text notes against a mod. Blank clears them.</summary>
+    public async Task SetModAdminNotesAsync(int modId, string? notes)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        var mod = await db.Mods.FirstOrDefaultAsync(m => m.Id == modId);
+        if (mod is null)
+        {
+            return;
+        }
+
+        mod.AdminNotes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        await db.SaveChangesAsync();
+    }
+
     public async Task RetryFetchAsync(int modId)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();

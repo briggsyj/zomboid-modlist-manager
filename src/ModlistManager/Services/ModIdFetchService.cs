@@ -54,6 +54,7 @@ public class ModIdFetchService(
 
         var notes = new List<string>();
         IReadOnlyList<PzModIdResult> discovered = [];
+        var source = ModIdSource.Unknown;
 
         if (_options.Enabled)
         {
@@ -61,6 +62,7 @@ public class ModIdFetchService(
             if (steamCmdResult.ModIds.Count > 0)
             {
                 discovered = steamCmdResult.ModIds;
+                source = ModIdSource.SteamCmd;
                 notes.Add($"SteamCMD found {discovered.Count} mod ID(s) in mod.info.");
             }
             else
@@ -96,6 +98,7 @@ public class ModIdFetchService(
             }
 
             discovered = [.. fromDescription.Select(id => new PzModIdResult(id, null))];
+            source = ModIdSource.SteamWorkshopApi;
             notes.Add($"Read {discovered.Count} mod ID(s) from the workshop description.");
         }
 
@@ -117,6 +120,7 @@ public class ModIdFetchService(
         }
 
         mod.FetchStatus = ModIdFetchStatus.Completed;
+        mod.ModIdSource = source;
         mod.FetchLog = Join(notes, $"Mod ID(s): {string.Join(", ", discovered.Select(d => d.Value))}");
         await db.SaveChangesAsync(stoppingToken);
     }

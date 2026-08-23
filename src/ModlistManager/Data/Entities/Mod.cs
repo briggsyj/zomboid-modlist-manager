@@ -32,6 +32,16 @@ public class Mod
     /// <summary>Diagnostic output from the last SteamCMD fetch attempt (stdout/stderr tail, error message, etc).</summary>
     public string? FetchLog { get; set; }
 
+    /// <summary>
+    /// Which lookup produced the Mod ID(s). SteamCMD reads the authoritative mod.info; the workshop
+    /// API trusts the "Mod ID:" line the author wrote in the description, so this records how much
+    /// to trust the value if a mod ever fails to load on the server.
+    /// </summary>
+    public ModIdSource ModIdSource { get; set; } = ModIdSource.Unknown;
+
+    /// <summary>Free-text notes an admin can keep against the mod. Not shown to visitors.</summary>
+    public string? AdminNotes { get; set; }
+
     /// <summary>True once at least one request for this mod has been approved.</summary>
     public bool IsInModlist { get; set; }
 
