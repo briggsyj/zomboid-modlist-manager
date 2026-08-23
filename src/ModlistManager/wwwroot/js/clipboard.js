@@ -1,6 +1,13 @@
-export function copyToClipboard(text) {
+export async function copyToClipboard(text) {
     if (navigator.clipboard && window.isSecureContext) {
-        return navigator.clipboard.writeText(text);
+        try {
+            await navigator.clipboard.writeText(text);
+            return;
+        } catch {
+            // A secure context isn't enough on its own - the write can still be refused by a
+            // permissions policy or because the browser didn't credit the click as a user gesture.
+            // Fall through to the textarea trick rather than giving up.
+        }
     }
 
     // Fallback for insecure contexts (e.g. plain http on a LAN) where the async Clipboard API is unavailable.
@@ -12,7 +19,9 @@ export function copyToClipboard(text) {
     textarea.focus();
     textarea.select();
     try {
-        document.execCommand('copy');
+        if (!document.execCommand('copy')) {
+            throw new Error('The browser refused to copy to the clipboard.');
+        }
     } finally {
         document.body.removeChild(textarea);
     }

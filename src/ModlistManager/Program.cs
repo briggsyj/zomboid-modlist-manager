@@ -27,6 +27,7 @@ if (!string.IsNullOrWhiteSpace(dataProtectionKeyPath))
 builder.Services.Configure<SteamCmdOptions>(builder.Configuration.GetSection(SteamCmdOptions.SectionName));
 builder.Services.AddSingleton<ModIdFetchQueue>();
 builder.Services.AddHostedService<ModIdFetchService>();
+builder.Services.AddSingleton<SteamCmdInstallResolver>();
 builder.Services.AddSingleton<SteamCmdModInfoReader>();
 builder.Services.AddSingleton<ModRequestService>();
 builder.Services.AddSingleton<AdminAuthService>();
