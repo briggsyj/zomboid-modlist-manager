@@ -131,6 +131,25 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
     }
 
     /// <summary>
+    /// Requests in any of the given statuses, newest first. Lets a caller fetch several statuses in
+    /// one round trip rather than querying per status.
+    /// </summary>
+    public async Task<List<ModRequest>> GetRequestsByStatusAsync(params RequestStatus[] statuses)
+    {
+        if (statuses.Length == 0)
+        {
+            return [];
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        return await db.ModRequests
+            .Include(r => r.Mod!).ThenInclude(m => m.PzModIds)
+            .Where(r => statuses.Contains(r.Status))
+            .OrderByDescending(r => r.CreatedAtUtc)
+            .ToListAsync();
+    }
+
+    /// <summary>
     /// The current modlist: every Mod with at least one approved request, optionally filtered by game.
     /// </summary>
     /// <param name="activeOnly">
@@ -156,7 +175,9 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
             query = query.Where(m => m.IsActive);
         }
 
-        return await query.OrderBy(m => m.Id).ToListAsync();
+        // Same order as the clipboard exports, so the table can be read against a pasted list.
+        var mods = await query.ToListAsync();
+        return [.. mods.OrderBy(m => WorkshopIdOrder(m.WorkshopId))];
     }
 
     /// <summary>
@@ -176,7 +197,9 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
             query = query.Where(m => m.Game == game);
         }
 
-        return await query.OrderBy(m => m.Id).ToListAsync();
+        // Ordered like the modlist and the exports, so every listing reads the same way.
+        var parked = await query.ToListAsync();
+        return [.. parked.OrderBy(m => WorkshopIdOrder(m.WorkshopId))];
     }
 
     public async Task SetStatusAsync(int requestId, RequestStatus status)
@@ -275,6 +298,14 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
     }
 
     /// <summary>
+    /// Sort key putting workshop IDs in ascending numeric order. They're stored as text, so sorting
+    /// them as strings would order "498441420" after "2872282653" - older 9-digit items really do
+    /// exist alongside current 10-digit ones. Unparseable values sort last rather than throwing.
+    /// </summary>
+    private static ulong WorkshopIdOrder(string workshopId) =>
+        ulong.TryParse(workshopId, out var value) ? value : ulong.MaxValue;
+
+    /// <summary>
     /// Semicolon-delimited Steam Workshop item IDs for every mod currently on a modlist, regardless
     /// of game. Deliberately includes inactive mods: the server should still download the item so
     /// the mod can be switched back on without a re-download.
@@ -284,26 +315,33 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
         await using var db = await dbContextFactory.CreateDbContextAsync();
         var ids = await db.Mods
             .Where(m => m.IsInModlist)
-            .OrderBy(m => m.Id)
             .Select(m => m.WorkshopId)
             .ToListAsync();
-        return string.Join(';', ids);
+
+        return string.Join(';', ids.OrderBy(WorkshopIdOrder));
     }
 
     /// <summary>
     /// Semicolon-delimited Project Zomboid Mod IDs for mods currently on the Project Zomboid modlist,
     /// each prefixed with a backslash (matching the Mods= line format PZ server configs expect).
     /// Only active mods are included - that's what makes a mod inactive.
+    ///
+    /// Ordered by workshop ID to match the WorkshopItems= export, so the two lists can be read
+    /// side by side. A workshop item bundling several mods contributes its Mod IDs together, in the
+    /// order they were discovered.
     /// </summary>
     public async Task<string> BuildApprovedZomboidModIdExportAsync()
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();
-        var modIds = await db.Mods
+        var mods = await db.Mods
+            .Include(m => m.PzModIds)
             .Where(m => m.IsInModlist && m.IsActive && m.Game == Mod.DefaultGame)
-            .OrderBy(m => m.Id)
-            .SelectMany(m => m.PzModIds)
-            .Select(p => p.Value)
             .ToListAsync();
+
+        var modIds = mods
+            .OrderBy(m => WorkshopIdOrder(m.WorkshopId))
+            .SelectMany(m => m.PzModIds.OrderBy(p => p.Id).Select(p => p.Value));
+
         return string.Join(';', modIds.Select(id => $"\\{id}"));
     }
 }

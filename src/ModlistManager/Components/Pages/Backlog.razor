@@ -67,38 +67,10 @@ else
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
 }
-else if (_backloggedRequests.Count == 0)
-{
-    <MudAlert Severity="Severity.Normal" Dense="true">Nothing in the backlog.</MudAlert>
-}
 else
 {
-    <MudTable Items="_backloggedRequests" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
-        <HeaderContent>
-            <MudTh>Mod</MudTh>
-            <MudTh>Requested by</MudTh>
-            <MudTh>Reason</MudTh>
-            <MudTh>Mod ID</MudTh>
-            <MudTh>Requested</MudTh>
-        </HeaderContent>
-        <RowTemplate Context="request">
-            <MudTd DataLabel="Mod">
-                <MudLink Href="@WorkshopUrl(request.Mod!.WorkshopId)" Target="_blank">@request.Mod!.DisplayName</MudLink>
-            </MudTd>
-            <MudTd DataLabel="Requested by">@request.RequesterName</MudTd>
-            <MudTd DataLabel="Reason">
-                <MudText Typo="Typo.body2">@request.Reason</MudText>
-            </MudTd>
-            <MudTd DataLabel="Mod ID">
-                <MudText Typo="Typo.body2" Class="font-monospace">
-                    @string.Join(", ", request.Mod!.PzModIds.Select(m => m.Value))
-                </MudText>
-            </MudTd>
-            <MudTd DataLabel="Requested">
-                <MudText Typo="Typo.caption">@request.CreatedAtUtc.ToLocalTime().ToString("g")</MudText>
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
+    @* Same component the request page uses, so the two listings can't drift apart. *@
+    <RequestsTable Requests="_backloggedRequests" EmptyMessage="Nothing in the backlog." />
 }
 
 @code {
@@ -108,7 +80,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         _parkedMods = await ModRequestService.GetParkedModsAsync();
-        _backloggedRequests = await ModRequestService.GetRequestsAsync(RequestStatus.Backlogged);
+        _backloggedRequests = await ModRequestService.GetRequestsByStatusAsync(RequestStatus.Backlogged);
     }
 
     private static string WorkshopUrl(string workshopId) =>

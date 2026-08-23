@@ -97,56 +97,25 @@
     </MudCardContent>
 </MudCard>
 
-<MudText Typo="Typo.h6">Pending requests</MudText>
-<MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
-    Waiting on an admin decision. Approved mods appear on the <MudLink Href="modlist">modlist</MudLink>.
-</MudText>
-
-@if (_pendingRequests is null)
+@if (_pendingRequests is null || _backloggedRequests is null)
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
 }
-else if (_pendingRequests.Count == 0)
-{
-    <MudAlert Severity="Severity.Normal" Dense="true">Nothing pending right now.</MudAlert>
-}
 else
 {
-    <MudTable Items="_pendingRequests" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
-        <HeaderContent>
-            <MudTh>Mod</MudTh>
-            <MudTh>Requested by</MudTh>
-            <MudTh>Reason</MudTh>
-            <MudTh>Mod ID</MudTh>
-            <MudTh>Submitted</MudTh>
-        </HeaderContent>
-        <RowTemplate Context="request">
-            <MudTd DataLabel="Mod">
-                <MudLink Href="@WorkshopUrl(request.Mod!.WorkshopId)" Target="_blank">@request.Mod!.DisplayName</MudLink>
-            </MudTd>
-            <MudTd DataLabel="Requested by">@request.RequesterName</MudTd>
-            <MudTd DataLabel="Reason">
-                <MudText Typo="Typo.body2">@request.Reason</MudText>
-            </MudTd>
-            <MudTd DataLabel="Mod ID">
-                @if (request.Mod!.PzModIds.Count > 0)
-                {
-                    <MudText Typo="Typo.body2" Class="font-monospace">
-                        @string.Join(", ", request.Mod!.PzModIds.Select(m => m.Value))
-                    </MudText>
-                }
-                else
-                {
-                    <MudChip T="string" Size="Size.Small" Color="@FetchColor(request.Mod!.FetchStatus)">
-                        @request.Mod!.FetchStatus
-                    </MudChip>
-                }
-            </MudTd>
-            <MudTd DataLabel="Submitted">
-                <MudText Typo="Typo.caption">@request.CreatedAtUtc.ToLocalTime().ToString("g")</MudText>
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
+    <MudText Typo="Typo.h6">Pending requests</MudText>
+    <MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+        Waiting on an admin decision. Approved mods appear on the <MudLink Href="modlist">modlist</MudLink>.
+    </MudText>
+
+    <RequestsTable Requests="_pendingRequests" EmptyMessage="Nothing pending right now." />
+
+    <MudText Typo="Typo.h6" Class="mt-8">Backlog</MudText>
+    <MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+        Reviewed and kept for later &mdash; not turned down, just not going on the server yet.
+    </MudText>
+
+    <RequestsTable Requests="_backloggedRequests" EmptyMessage="Nothing in the backlog." />
 }
 
 @code {
@@ -161,6 +130,7 @@ else
     private bool _lookingUp;
     private bool _lookupFailed;
     private List<ModRequest>? _pendingRequests;
+    private List<ModRequest>? _backloggedRequests;
     private List<string> _nameSuggestions = [];
     private List<ModRequestService.ExistingRequestInfo> _existingRequests = [];
     private CancellationTokenSource? _pollCts;
@@ -174,7 +144,10 @@ else
 
     private async Task RefreshAsync()
     {
-        _pendingRequests = await ModRequestService.GetRequestsAsync(RequestStatus.Pending);
+        // One query for both sections, split in memory, rather than a round trip per status.
+        var open = await ModRequestService.GetRequestsByStatusAsync(RequestStatus.Pending, RequestStatus.Backlogged);
+        _pendingRequests = open.Where(r => r.Status == RequestStatus.Pending).ToList();
+        _backloggedRequests = open.Where(r => r.Status == RequestStatus.Backlogged).ToList();
         _nameSuggestions = await ModRequestService.GetDistinctRequesterNamesAsync();
     }
 
@@ -225,8 +198,8 @@ else
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(4));
         while (await timer.WaitForNextTickAsync(token))
         {
-            if (_pendingRequests is null
-                || _pendingRequests.All(r => r.Mod!.FetchStatus is ModIdFetchStatus.Completed or ModIdFetchStatus.Failed))
+            var shown = (_pendingRequests ?? []).Concat(_backloggedRequests ?? []);
+            if (shown.All(r => r.Mod!.FetchStatus is ModIdFetchStatus.Completed or ModIdFetchStatus.Failed))
             {
                 continue;
             }
@@ -236,22 +209,11 @@ else
         }
     }
 
-    private static string WorkshopUrl(string workshopId) =>
-        $"https://steamcommunity.com/sharedfiles/filedetails/?id={workshopId}";
-
     private static Color StatusColor(RequestStatus status) => status switch
     {
         RequestStatus.Approved => Color.Success,
         RequestStatus.Backlogged => Color.Warning,
         RequestStatus.Declined => Color.Error,
-        _ => Color.Default
-    };
-
-    private static Color FetchColor(ModIdFetchStatus status) => status switch
-    {
-        ModIdFetchStatus.Completed => Color.Success,
-        ModIdFetchStatus.Processing => Color.Info,
-        ModIdFetchStatus.Failed => Color.Error,
         _ => Color.Default
     };
 
