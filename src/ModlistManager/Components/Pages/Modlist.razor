@@ -8,7 +8,8 @@
 @implements IAsyncDisposable
 
 @* Public page, in two lists: what the server is loading, and what's approved but switched off.
-   Admins additionally get the Active toggles, the details panels, drag-reordering and the exports. *@
+   The exports are public too. Admins additionally get the Active toggles, the details panels and
+   drag-reordering. *@
 
 <PageTitle>Active Mods</PageTitle>
 
@@ -29,20 +30,18 @@
 
     <MudSpacer />
 
-    <AuthorizeView Context="exportAuth">
-        <Authorized>
-            @if (_copiedMessage is not null)
-            {
-                <MudText Typo="Typo.body2" Color="Color.Success">@_copiedMessage</MudText>
-            }
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CopyWorkshopIdsAsync">
-                Copy Workshop IDs
-            </MudButton>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CopyZomboidModIdsAsync">
-                Copy Zomboid Mod IDs
-            </MudButton>
-        </Authorized>
-    </AuthorizeView>
+    @* Exports are public: the lists themselves already are, and players copy them into their own
+       clients. Editing the modlist stays admin-only. *@
+    @if (_copiedMessage is not null)
+    {
+        <MudText Typo="Typo.body2" Color="@(_copyFailed ? Color.Error : Color.Success)">@_copiedMessage</MudText>
+    }
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CopyWorkshopIdsAsync">
+        Copy Workshop IDs
+    </MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CopyZomboidModIdsAsync">
+        Copy Zomboid Mod IDs
+    </MudButton>
 </MudStack>
 
 <AuthorizeView>
@@ -197,6 +196,7 @@ else
     private List<Mod>? _activeMods;
     private List<Mod>? _disabledMods;
     private string? _copiedMessage;
+    private bool _copyFailed;
     private bool _isAdmin;
     private IJSObjectReference? _clipboardModule;
     private readonly HashSet<int> _expandedMods = [];
@@ -287,9 +287,20 @@ else
 
     private async Task CopyAsync(string payload, string emptyMessage)
     {
-        var module = await GetClipboardModuleAsync();
-        await module.InvokeVoidAsync("copyToClipboard", payload);
-        _copiedMessage = string.IsNullOrEmpty(payload) ? emptyMessage : "Copied!";
+        try
+        {
+            var module = await GetClipboardModuleAsync();
+            await module.InvokeVoidAsync("copyToClipboard", payload);
+            _copyFailed = false;
+            _copiedMessage = string.IsNullOrEmpty(payload) ? emptyMessage : "Copied!";
+        }
+        catch (JSException)
+        {
+            // Now that these buttons are public, a browser that blocks clipboard writes must not
+            // take the whole circuit down with it - say so and leave the page working.
+            _copyFailed = true;
+            _copiedMessage = "Your browser blocked the copy. Check its clipboard permission for this site.";
+        }
     }
 
     private void OnDragStart(Mod mod)
