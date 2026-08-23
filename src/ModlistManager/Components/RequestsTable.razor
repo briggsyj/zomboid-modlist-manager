@@ -1,0 +1,64 @@
+@* Shared by the pending and backlog sections of the request page. *@
+@using ModlistManager.Data.Entities
+
+@if (Requests.Count == 0)
+{
+    <MudAlert Severity="Severity.Normal" Dense="true">@EmptyMessage</MudAlert>
+}
+else
+{
+    <MudTable Items="Requests" Dense="true" Hover="true" Elevation="1" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Mod</MudTh>
+            <MudTh>Requested by</MudTh>
+            <MudTh>Reason</MudTh>
+            <MudTh>Mod ID</MudTh>
+            <MudTh>Submitted</MudTh>
+        </HeaderContent>
+        <RowTemplate Context="request">
+            <MudTd DataLabel="Mod">
+                <MudLink Href="@WorkshopUrl(request.Mod!.WorkshopId)" Target="_blank">@request.Mod!.DisplayName</MudLink>
+            </MudTd>
+            <MudTd DataLabel="Requested by">@request.RequesterName</MudTd>
+            <MudTd DataLabel="Reason">
+                <MudText Typo="Typo.body2">@request.Reason</MudText>
+            </MudTd>
+            <MudTd DataLabel="Mod ID">
+                @if (request.Mod!.PzModIds.Count > 0)
+                {
+                    <MudText Typo="Typo.body2" Class="font-monospace">
+                        @string.Join(", ", request.Mod!.PzModIds.Select(m => m.Value))
+                    </MudText>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@FetchColor(request.Mod!.FetchStatus)">
+                        @request.Mod!.FetchStatus
+                    </MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Submitted">
+                <MudText Typo="Typo.caption">@request.CreatedAtUtc.ToLocalTime().ToString("g")</MudText>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ModRequest> Requests { get; set; } = [];
+
+    [Parameter]
+    public string EmptyMessage { get; set; } = "Nothing here right now.";
+
+    private static string WorkshopUrl(string workshopId) =>
+        $"https://steamcommunity.com/sharedfiles/filedetails/?id={workshopId}";
+
+    private static Color FetchColor(ModIdFetchStatus status) => status switch
+    {
+        ModIdFetchStatus.Completed => Color.Success,
+        ModIdFetchStatus.Processing => Color.Info,
+        ModIdFetchStatus.Failed => Color.Error,
+        _ => Color.Default
+    };
+}

@@ -206,6 +206,47 @@ public class ModRequestServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetRequestsByStatusAsync_ReturnsOnlyTheRequestedStatuses()
+    {
+        var pending = await _service.CreateRequestAsync("111", "Alice");
+        var backlogged = await _service.CreateRequestAsync("222", "Bob");
+        var approved = await _service.CreateRequestAsync("333", "Carl");
+        var declined = await _service.CreateRequestAsync("444", "Dave");
+
+        await _service.SetStatusAsync(backlogged.RequestId!.Value, RequestStatus.Backlogged);
+        await _service.SetStatusAsync(approved.RequestId!.Value, RequestStatus.Approved);
+        await _service.SetStatusAsync(declined.RequestId!.Value, RequestStatus.Declined);
+
+        // What the public request page asks for: everything still open.
+        var open = await _service.GetRequestsByStatusAsync(RequestStatus.Pending, RequestStatus.Backlogged);
+
+        Assert.Equal(
+            [pending.RequestId, backlogged.RequestId],
+            open.Select(r => (int?)r.Id).Order());
+    }
+
+    [Fact]
+    public async Task GetRequestsByStatusAsync_ReturnsEmptyWhenNoStatusesGiven()
+    {
+        await _service.CreateRequestAsync("111", "Alice");
+
+        Assert.Empty(await _service.GetRequestsByStatusAsync());
+    }
+
+    [Fact]
+    public async Task GetRequestsByStatusAsync_IncludesTheModSoTitlesAndModIdsRender()
+    {
+        var created = await _service.CreateRequestAsync("111", "Alice");
+        var modId = (await GetRequestAsync(created.RequestId!.Value)).ModId;
+        await _service.AddManualModIdAsync(modId, "SomeMod", null);
+
+        var request = Assert.Single(await _service.GetRequestsByStatusAsync(RequestStatus.Pending));
+
+        Assert.NotNull(request.Mod);
+        Assert.Equal("SomeMod", Assert.Single(request.Mod!.PzModIds).Value);
+    }
+
+    [Fact]
     public async Task GetDistinctRequesterNamesAsync_ReturnsNormalizedDistinctSortedNames()
     {
         await _service.CreateRequestAsync("111", "Bob");
