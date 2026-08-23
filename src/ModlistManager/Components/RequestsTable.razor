@@ -16,7 +16,8 @@ else
             <MudTh>Submitted</MudTh>
         </HeaderContent>
         <RowTemplate Context="request">
-            <MudTd DataLabel="Mod">
+            @* Names are short enough to sit on one line; wrapping them made the column ragged. *@
+            <MudTd DataLabel="Mod" Style="white-space: nowrap;">
                 <MudLink Href="@WorkshopUrl(request.Mod!.WorkshopId)" Target="_blank">@request.Mod!.DisplayName</MudLink>
             </MudTd>
             <MudTd DataLabel="Requested by">@request.RequesterName</MudTd>

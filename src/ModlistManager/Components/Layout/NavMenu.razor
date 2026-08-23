@@ -12,10 +12,6 @@
     <MudNavLink Href="backlog" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Schedule">
         Backlog
     </MudNavLink>
-    <MudNavLink Href="active-mods" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Checklist">
-        Active Mods
-    </MudNavLink>
-
     <AuthorizeView Context="adminNav">
         <Authorized>
             <MudNavLink Href="manage" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">
@@ -23,6 +19,10 @@
             </MudNavLink>
         </Authorized>
     </AuthorizeView>
+
+    <MudNavLink Href="active-mods" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Checklist">
+        Active Mods
+    </MudNavLink>
 </MudNavMenu>
 
 <MudDivider Class="my-2" />
