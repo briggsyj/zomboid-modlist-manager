@@ -149,8 +149,15 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
             .ToListAsync();
     }
 
-    /// <summary>The current modlist: every Mod with at least one approved request, optionally filtered by game.</summary>
-    public async Task<List<Mod>> GetModlistAsync(string? game = null)
+    /// <summary>
+    /// The current modlist: every Mod with at least one approved request, optionally filtered by game.
+    /// </summary>
+    /// <param name="activeOnly">
+    /// Restrict to mods the server actually loads. Visitors are shown this view, so a mod an admin has
+    /// parked isn't advertised as being on the server; admins see everything so they can un-park it.
+    /// This is a query filter rather than a UI concern on purpose - the modlist page is public.
+    /// </param>
+    public async Task<List<Mod>> GetModlistAsync(string? game = null, bool activeOnly = false)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync();
         var query = db.Mods
@@ -163,9 +170,36 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
             query = query.Where(m => m.Game == game);
         }
 
+        if (activeOnly)
+        {
+            query = query.Where(m => m.IsActive);
+        }
+
         // Same order as the clipboard exports, so the table can be read against a pasted list.
         var mods = await query.ToListAsync();
         return [.. mods.OrderBy(m => WorkshopIdOrder(m.WorkshopId))];
+    }
+
+    /// <summary>
+    /// Approved mods the server isn't currently loading - approved, then switched off by an admin.
+    /// The counterpart to the visitor modlist: between them they cover every approved mod.
+    /// </summary>
+    public async Task<List<Mod>> GetParkedModsAsync(string? game = null)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        var query = db.Mods
+            .Include(m => m.PzModIds)
+            .Include(m => m.Requests)
+            .Where(m => m.IsInModlist && !m.IsActive)
+            .AsQueryable();
+        if (game is not null)
+        {
+            query = query.Where(m => m.Game == game);
+        }
+
+        // Ordered like the modlist and the exports, so every listing reads the same way.
+        var parked = await query.ToListAsync();
+        return [.. parked.OrderBy(m => WorkshopIdOrder(m.WorkshopId))];
     }
 
     public async Task SetStatusAsync(int requestId, RequestStatus status)
@@ -212,6 +246,20 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
         }
 
         mod.IsActive = isActive;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Saves an admin's free-text notes against a mod. Blank clears them.</summary>
+    public async Task SetModAdminNotesAsync(int modId, string? notes)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        var mod = await db.Mods.FirstOrDefaultAsync(m => m.Id == modId);
+        if (mod is null)
+        {
+            return;
+        }
+
+        mod.AdminNotes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
         await db.SaveChangesAsync();
     }
 

@@ -6,14 +6,22 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-@* Public: anyone can see which mods made it onto the server. Only admins get the export buttons,
-   since those are for pasting into server config. *@
+@* Public page. Visitors see the mods the server actually loads; admins additionally see parked
+   (inactive) mods, the Active toggles, and the export buttons for pasting into server config. *@
 
 <PageTitle>Modlist</PageTitle>
 
 <MudText Typo="Typo.h4" GutterBottom="true">Modlist</MudText>
 <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
-    Mods approved for the server. Want something added? <MudLink Href="">Make a request</MudLink>.
+    @if (_isAdmin)
+    {
+        <text>Every approved mod, including parked ones.</text>
+    }
+    else
+    {
+        <text>Mods currently running on the server.</text>
+    }
+    Want something added? <MudLink Href="/">Make a request</MudLink>.
 </MudText>
 
 <MudSelect T="string" Value="_selectedGame" ValueChanged="OnGameChangedAsync" Label="Game"
@@ -41,6 +49,7 @@
         <MudText Typo="Typo.caption" Class="d-block mb-4 mud-text-secondary">
             Unticking <em>Active</em> keeps the mod on the list and in the Workshop IDs export, but drops
             it from the Zomboid Mod IDs export &mdash; so the server still downloads it without loading it.
+            Parked mods are hidden from visitors, who only see what's actually running.
         </MudText>
     </Authorized>
 </AuthorizeView>
@@ -64,6 +73,9 @@ else
             <MudTh>Mod ID</MudTh>
             <MudTh>Requested by</MudTh>
             <MudTh>Added</MudTh>
+            <AuthorizeView Context="auth">
+                <Authorized><MudTh>Details</MudTh></Authorized>
+            </AuthorizeView>
         </HeaderContent>
         <RowTemplate Context="mod">
             <AuthorizeView Context="auth">
@@ -90,7 +102,62 @@ else
             <MudTd DataLabel="Added">
                 <MudText Typo="Typo.caption">@(mod.AddedToModlistAtUtc?.ToLocalTime().ToString("g"))</MudText>
             </MudTd>
+            <AuthorizeView Context="auth">
+                <Authorized>
+                    <MudTd>
+                        <MudIconButton Size="Size.Small"
+                                       Icon="@(IsExpanded(mod.Id) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                       OnClick="@(() => ToggleExpanded(mod.Id))"
+                                       aria-label="@(IsExpanded(mod.Id) ? "Hide details" : "Show details")" />
+                    </MudTd>
+                </Authorized>
+            </AuthorizeView>
         </RowTemplate>
+        <ChildRowContent Context="mod">
+            @if (_isAdmin && IsExpanded(mod.Id))
+            {
+                <MudTr>
+                    <td colspan="6" class="pa-4" style="background-color: var(--mud-palette-background-grey);">
+                        <MudGrid Spacing="3">
+                            <MudItem xs="12" md="6">
+                                <MudText Typo="Typo.subtitle2" GutterBottom="true">Mod ID lookup</MudText>
+                                <MudText Typo="Typo.body2">
+                                    Source:
+                                    <MudChip T="string" Size="Size.Small" Color="@SourceColor(mod.ModIdSource)">
+                                        @SourceLabel(mod.ModIdSource)
+                                    </MudChip>
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="mt-1">
+                                    Status:
+                                    <MudChip T="string" Size="Size.Small" Color="@FetchColor(mod.FetchStatus)">
+                                        @mod.FetchStatus
+                                    </MudChip>
+                                </MudText>
+                                @if (!string.IsNullOrWhiteSpace(mod.FetchLog))
+                                {
+                                    <MudText Typo="Typo.caption" Class="d-block mud-text-secondary mt-2"
+                                             Style="white-space: pre-wrap;">@mod.FetchLog</MudText>
+                                }
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudText Typo="Typo.subtitle2" GutterBottom="true">Admin notes</MudText>
+                                <MudTextField T="string" Value="@GetNoteDraft(mod)"
+                                              ValueChanged="@(v => _noteDrafts[mod.Id] = v ?? string.Empty)"
+                                              Immediate="true" Lines="3" Variant="Variant.Outlined"
+                                              Placeholder="Anything worth remembering about this mod - conflicts, version notes, why it's parked." />
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2"
+                                           OnClick="@(() => SaveNotesAsync(mod))">Save notes</MudButton>
+                                @if (_savedNoteFor == mod.Id)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Success" Class="ml-2">Saved</MudText>
+                                }
+                            </MudItem>
+                        </MudGrid>
+                    </td>
+                </MudTr>
+            }
+        </ChildRowContent>
     </MudTable>
 }
 
@@ -102,10 +169,16 @@ else
     private string _selectedGame = Mod.DefaultGame;
     private List<Mod>? _mods;
     private string? _copiedMessage;
+    private bool _isAdmin;
     private IJSObjectReference? _clipboardModule;
+    private readonly HashSet<int> _expandedMods = [];
+    private readonly Dictionary<int, string> _noteDrafts = [];
+    private int? _savedNoteFor;
 
     protected override async Task OnInitializedAsync()
     {
+        _isAdmin = await IsAdminAsync();
+
         var distinctGames = await ModRequestService.GetDistinctGamesAsync();
         if (distinctGames.Count > 0)
         {
@@ -122,19 +195,26 @@ else
     private async Task<IJSObjectReference> GetClipboardModuleAsync() =>
         _clipboardModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/clipboard.js");
 
-    private async Task RefreshAsync() => _mods = await ModRequestService.GetModlistAsync(_selectedGame);
+    // Visitors get only what the server actually loads; admins get parked mods too.
+    private async Task RefreshAsync() =>
+        _mods = await ModRequestService.GetModlistAsync(_selectedGame, activeOnly: !_isAdmin);
+
+    private async Task<bool> IsAdminAsync()
+    {
+        if (AuthenticationStateTask is null)
+        {
+            return false;
+        }
+
+        var state = await AuthenticationStateTask;
+        return state.User.Identity?.IsAuthenticated == true;
+    }
 
     private async Task SetActiveAsync(Mod mod, bool isActive)
     {
         // The checkbox is only rendered inside AuthorizeView, but this page is public, so re-check
         // server-side rather than treating "we didn't draw the control" as the security boundary.
-        if (AuthenticationStateTask is null)
-        {
-            return;
-        }
-
-        var state = await AuthenticationStateTask;
-        if (state.User.Identity?.IsAuthenticated != true)
+        if (!await IsAdminAsync())
         {
             return;
         }
@@ -170,8 +250,61 @@ else
         _copiedMessage = string.IsNullOrEmpty(payload) ? emptyMessage : "Copied!";
     }
 
+    private bool IsExpanded(int modId) => _expandedMods.Contains(modId);
+
+    private void ToggleExpanded(int modId)
+    {
+        if (!_expandedMods.Remove(modId))
+        {
+            _expandedMods.Add(modId);
+        }
+
+        _savedNoteFor = null;
+    }
+
+    private string GetNoteDraft(Mod mod) =>
+        _noteDrafts.TryGetValue(mod.Id, out var draft) ? draft : mod.AdminNotes ?? string.Empty;
+
+    private async Task SaveNotesAsync(Mod mod)
+    {
+        // Same reasoning as the Active toggle: this page is public, so re-check server-side rather
+        // than relying on the panel not being rendered for visitors.
+        if (!await IsAdminAsync())
+        {
+            return;
+        }
+
+        var notes = GetNoteDraft(mod);
+        await ModRequestService.SetModAdminNotesAsync(mod.Id, notes);
+        mod.AdminNotes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        _savedNoteFor = mod.Id;
+    }
+
     private static string WorkshopUrl(string workshopId) =>
         $"https://steamcommunity.com/sharedfiles/filedetails/?id={workshopId}";
+
+    private static string SourceLabel(ModIdSource source) => source switch
+    {
+        ModIdSource.SteamCmd => "SteamCMD (mod.info)",
+        ModIdSource.SteamWorkshopApi => "Workshop API (description)",
+        _ => "Not resolved"
+    };
+
+    private static Color SourceColor(ModIdSource source) => source switch
+    {
+        // SteamCMD reads the file the game itself loads, so it's the more trustworthy of the two.
+        ModIdSource.SteamCmd => Color.Success,
+        ModIdSource.SteamWorkshopApi => Color.Info,
+        _ => Color.Default
+    };
+
+    private static Color FetchColor(ModIdFetchStatus status) => status switch
+    {
+        ModIdFetchStatus.Completed => Color.Success,
+        ModIdFetchStatus.Processing => Color.Info,
+        ModIdFetchStatus.Failed => Color.Error,
+        _ => Color.Default
+    };
 
     public async ValueTask DisposeAsync()
     {
