@@ -1,26 +1,47 @@
-@* Rendered inside the MudAppBar. The logout action stays a real form POST because signing out
-   needs HttpContext, which an interactive circuit can't touch after the initial response. *@
+@* Rendered inside the left drawer. The logout action stays a real form POST because signing out
+   needs HttpContext, which an interactive circuit can't touch after the initial response - so it
+   sits outside MudNavMenu rather than being a MudNavLink.
 
-@* Href must be "/" rather than "": MudButton renders a plain <button> for an empty Href, which
-   silently makes the link do nothing. *@
-<MudButton Href="/" Variant="Variant.Text" Color="Color.Inherit">Requests</MudButton>
-<MudButton Href="modlist" Variant="Variant.Text" Color="Color.Inherit">Modlist</MudButton>
-<AuthorizeView Context="adminNav">
-    <Authorized>
-        <MudButton Href="admin" Variant="Variant.Text" Color="Color.Inherit">Admin</MudButton>
-    </Authorized>
-</AuthorizeView>
-<MudButton Href="backlog" Variant="Variant.Text" Color="Color.Inherit">Backlog</MudButton>
+   Routes are deliberately unchanged by the page renames: /modlist and /admin still work, so
+   existing links and bookmarks don't break. *@
 
-<MudSpacer />
+<MudNavMenu>
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.PlaylistAdd">
+        Requests
+    </MudNavLink>
+    <MudNavLink Href="backlog" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Schedule">
+        Backlog
+    </MudNavLink>
+    <MudNavLink Href="active-mods" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Checklist">
+        Active Mods
+    </MudNavLink>
 
-<AuthorizeView>
-    <Authorized>
-        <form method="post" action="/account/logout" class="d-inline">
-            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Text" Color="Color.Inherit">Log out</MudButton>
-        </form>
-    </Authorized>
-    <NotAuthorized>
-        <MudButton Href="login" Variant="Variant.Text" Color="Color.Inherit">Admin login</MudButton>
-    </NotAuthorized>
-</AuthorizeView>
+    <AuthorizeView Context="adminNav">
+        <Authorized>
+            <MudNavLink Href="manage" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">
+                Manage
+            </MudNavLink>
+        </Authorized>
+    </AuthorizeView>
+</MudNavMenu>
+
+<MudDivider Class="my-2" />
+
+<div class="px-4 pb-4">
+    <AuthorizeView>
+        <Authorized>
+            <form method="post" action="/account/logout">
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Text" FullWidth="true"
+                           StartIcon="@Icons.Material.Filled.Logout" Class="justify-start">
+                    Log out
+                </MudButton>
+            </form>
+        </Authorized>
+        <NotAuthorized>
+            <MudButton Href="login" Variant="Variant.Text" FullWidth="true"
+                       StartIcon="@Icons.Material.Filled.Login" Class="justify-start">
+                Login
+            </MudButton>
+        </NotAuthorized>
+    </AuthorizeView>
+</div>

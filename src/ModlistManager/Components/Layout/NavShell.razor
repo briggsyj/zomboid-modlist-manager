@@ -1,0 +1,24 @@
+@rendermode InteractiveServer
+
+@* The app bar and drawer live here rather than in MainLayout because a layout renders statically -
+   the render mode a page declares doesn't extend to the layout wrapping it - so a toggle defined
+   there would never respond to clicks. *@
+
+<MudAppBar Elevation="1" Color="Color.Primary">
+    <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                   OnClick="ToggleDrawer" aria-label="Toggle navigation" />
+</MudAppBar>
+
+<MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive"
+           ClipMode="DrawerClipMode.Never" Elevation="1">
+    <MudDrawerHeader>
+        <MudText Typo="Typo.h6">Modlist Manager</MudText>
+    </MudDrawerHeader>
+    <NavMenu />
+</MudDrawer>
+
+@code {
+    private bool _drawerOpen = true;
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+}

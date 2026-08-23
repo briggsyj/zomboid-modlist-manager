@@ -33,6 +33,15 @@ public partial class ModRequestService(IDbContextFactory<AppDbContext> dbContext
 
         await using var db = await dbContextFactory.CreateDbContextAsync();
 
+        // One request per workshop item. The form warns before submitting, but it posts as a plain
+        // form, so the check has to hold here too rather than relying on the button being disabled.
+        var alreadyRequested = await db.ModRequests
+            .AnyAsync(r => r.Mod!.Game == game && r.Mod.WorkshopId == workshopId);
+        if (alreadyRequested)
+        {
+            return new CreateResult(false, "That mod has already been requested.", null);
+        }
+
         var mod = await db.Mods.FirstOrDefaultAsync(m => m.Game == game && m.WorkshopId == workshopId);
         var isNewMod = mod is null;
         if (mod is null)

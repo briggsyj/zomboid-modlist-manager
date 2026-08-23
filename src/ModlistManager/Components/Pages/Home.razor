@@ -69,9 +69,6 @@
                             <MudChip T="string" Size="Size.Small" Color="@StatusColor(existing.Status)">@existing.Status</MudChip>
                         </MudText>
                     }
-                    <MudText Typo="Typo.caption">
-                        You can still submit &mdash; it will be added as another vote for the same mod.
-                    </MudText>
                 </MudAlert>
             }
             else
@@ -90,7 +87,10 @@
                           Placeholder="What does this mod add, and why is it worth having on the server?"
                           name="reason" id="reason" />
 
-            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">
+            @* Disabled on a known duplicate. The server rejects it either way - this is just so the
+               button doesn't invite a submission that can't succeed. *@
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                       Disabled="_existingRequests.Count > 0">
                 Submit request
             </MudButton>
         </form>
@@ -105,7 +105,7 @@ else
 {
     <MudText Typo="Typo.h6">Pending requests</MudText>
     <MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
-        Waiting on an admin decision. Approved mods appear on the <MudLink Href="modlist">modlist</MudLink>.
+        Waiting for review. Approved mods appear under <MudLink Href="active-mods">Active Mods</MudLink>.
     </MudText>
 
     <RequestsTable Requests="_pendingRequests" EmptyMessage="Nothing pending right now." />

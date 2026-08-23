@@ -51,13 +51,41 @@ public class DuplicateRequestTests : IDisposable
     [Fact]
     public async Task FindExistingRequestsAsync_ReturnsEveryRequestForTheSameItem()
     {
+        // The service now refuses a second request for the same item, but older databases contain
+        // them, so the lookup still has to report all of them.
         await _service.CreateRequestAsync("111", "Alice");
-        await _service.CreateRequestAsync("111", "Bob");
+        await using (var db = _dbFactory.CreateDbContext())
+        {
+            var mod = db.Mods.Single(m => m.WorkshopId == "111");
+            db.ModRequests.Add(new ModRequest { ModId = mod.Id, RequesterName = "bob", Status = RequestStatus.Pending });
+            await db.SaveChangesAsync();
+        }
 
         var existing = await _service.FindExistingRequestsAsync("111");
 
         Assert.Equal(2, existing.Count);
         Assert.Equal(["alice", "bob"], existing.Select(e => e.RequesterName));
+    }
+
+    [Fact]
+    public async Task ADuplicateSubmissionIsRejected()
+    {
+        await _service.CreateRequestAsync("111", "Alice");
+
+        var second = await _service.CreateRequestAsync("111", "Bob");
+
+        Assert.False(second.Success);
+        Assert.Single(await _service.GetRequestsAsync());
+    }
+
+    [Fact]
+    public async Task ADeclinedModStillCountsAsAlreadyRequested()
+    {
+        var first = await _service.CreateRequestAsync("111", "Alice");
+        await _service.SetStatusAsync(first.RequestId!.Value, RequestStatus.Declined);
+
+        // Deliberate: a declined mod shouldn't be quietly re-requested to get a different answer.
+        Assert.False((await _service.CreateRequestAsync("111", "Bob")).Success);
     }
 
     [Fact]

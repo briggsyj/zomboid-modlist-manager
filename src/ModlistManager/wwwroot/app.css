@@ -31,3 +31,25 @@
     right: 0.75rem;
     top: 0.5rem;
 }
+
+/* Kanban board (Manage page).
+   These target elements MudBlazor renders, so they can't live in a scoped .razor.css file -
+   scoped styles only get their attribute applied to markup the component itself emits, and the
+   rules would silently never match. An empty drop zone with no height is invisible and
+   undroppable, which is what made this worth catching. */
+.kanban-column {
+    height: 100%;
+    background-color: var(--mud-palette-background-grey);
+}
+
+.kanban-dropzone {
+    min-height: 8rem;
+}
+
+.kanban-card {
+    cursor: grab;
+}
+
+.kanban-card:active {
+    cursor: grabbing;
+}
