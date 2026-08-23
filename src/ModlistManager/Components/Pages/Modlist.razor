@@ -63,12 +63,12 @@
                     }
                     <th>Mod</th>
                     <th>Mod ID</th>
-                    <th>Requested by</th>
-                    <th>Added</th>
+                    @* Who asked for a mod is admin business; visitors just see what's running. *@
                     @if (_isAdmin)
                     {
-                        <th style="width: 3rem;">Details</th>
+                        <th>Requested by</th>
                     }
+                    <th>Added</th>
                 </tr>
             </thead>
             <tbody>
@@ -108,26 +108,26 @@
                                 @string.Join(", ", mod.PzModIds.Where(m => m.IsEnabled).Select(m => m.Value))
                             </MudText>
                         </td>
-                        <td>@string.Join(", ", mod.Requests.Select(r => r.RequesterName).Distinct())</td>
+                        @if (_isAdmin)
+                        {
+                            <td>@string.Join(", ", mod.Requests.Select(r => r.RequesterName).Distinct())</td>
+                        }
                         <td>
                             <MudText Typo="Typo.caption">@(mod.AddedToModlistAtUtc?.ToLocalTime().ToString("g"))</MudText>
                         </td>
-                        @if (_isAdmin)
-                        {
-                            <td>
-                                <MudIconButton Size="Size.Small"
-                                               Icon="@(IsExpanded(mod.Id) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
-                                               OnClick="@(() => ToggleExpanded(mod.Id))"
-                                               aria-label="@(IsExpanded(mod.Id) ? "Hide details" : "Show details")" />
-                            </td>
-                        }
                     </tr>
 
-                    @if (_isAdmin && IsExpanded(mod.Id))
+                    @if (_isAdmin)
                     {
-                        <tr>
-                            <td colspan="7" class="pa-4" style="background-color: var(--mud-palette-background-grey);">
-                                <ModDetailsPanel Mod="mod" OnChanged="OnDetailsChangedAsync" />
+                        @* MudExpansionPanel handles its own expand/collapse, so there's no
+                           expanded-row state for the page to track. *@
+                        <tr class="modlist-details-row">
+                            <td colspan="6" class="pa-0">
+                                <MudExpansionPanels Elevation="0" Dense="true">
+                                    <MudExpansionPanel Text="Details">
+                                        <ModDetailsPanel Mod="mod" OnChanged="OnDetailsChangedAsync" />
+                                    </MudExpansionPanel>
+                                </MudExpansionPanels>
                             </td>
                         </tr>
                     }
@@ -176,7 +176,6 @@ else
     private string? _copiedMessage;
     private bool _isAdmin;
     private IJSObjectReference? _clipboardModule;
-    private readonly HashSet<int> _expandedMods = [];
     private Mod? _dragged;
     private List<int> _orderAtDragStart = [];
 
@@ -327,16 +326,6 @@ else
         await ModRequestService.ReorderModlistAsync(ids);
         _orderAtDragStart = ids;
         _copiedMessage = null;
-    }
-
-    private bool IsExpanded(int modId) => _expandedMods.Contains(modId);
-
-    private void ToggleExpanded(int modId)
-    {
-        if (!_expandedMods.Remove(modId))
-        {
-            _expandedMods.Add(modId);
-        }
     }
 
     private static string WorkshopUrl(string workshopId) =>
