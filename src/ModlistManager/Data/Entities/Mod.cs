@@ -56,6 +56,13 @@ public class Mod
     /// <summary>When this mod first entered the modlist. Preserved across later approve/un-approve toggles.</summary>
     public DateTime? AddedToModlistAtUtc { get; set; }
 
+    /// <summary>
+    /// Position in the modlist, ascending. Admins set this by dragging rows, and both clipboard
+    /// exports follow it - load order matters in Project Zomboid, where one mod can override
+    /// another's files. Assigned on first approval, appending to the end of the list.
+    /// </summary>
+    public int SortOrder { get; set; }
+
     public List<PzModId> PzModIds { get; set; } = [];
 
     public List<ModRequest> Requests { get; set; } = [];
