@@ -125,13 +125,25 @@ docker compose build --build-arg INSTALL_STEAMCMD=true
 #   SteamCmd__Enabled: "true"
 ```
 
-Or locally, install [SteamCMD](https://developer.valvesoftware.com/wiki/SteamCMD) and set under the
-`SteamCmd` section (or as `SteamCmd__*` environment variables):
+Or locally, install [SteamCMD](https://developer.valvesoftware.com/wiki/SteamCMD) and set
+`SteamCmd:Enabled` to `true`. Nothing else needs configuring: the app finds `steamcmd` on PATH,
+follows a Chocolatey shim to the real executable if that is what it lands on, and works out where the
+downloaded content will appear. The rest of the `SteamCmd` section (or `SteamCmd__*` environment
+variables) is there for unusual installs:
 
 - `Enabled` - `true` to try SteamCMD first.
 - `ExecutablePath` - path to the `steamcmd` executable (defaults to `steamcmd` on PATH).
-- `WorkshopContentRoot` - the directory SteamCMD treats as its install root, under which it creates
-  `steamapps/workshop/content/108600/<item id>`. This varies by install method, so it has no default.
+- `WorkingDirectory` - where to bootstrap a private SteamCMD when the installed one lives somewhere
+  read-only. Defaults to `ZomboidModlistManager/steamcmd` under the local application data directory.
+- `WorkshopContentRoot` - override for the directory SteamCMD treats as its Steam root, under which
+  it creates `steamapps/workshop/content/108600/<item id>`. Empty means "derive it".
+
+SteamCMD keeps *everything* - config, logs, and downloaded workshop content - next to its own
+executable, and it crashes on startup (a bare stack overflow, no error message) if that directory is
+read-only. A system-wide install such as Chocolatey's under `C:\ProgramData\chocolatey` is read-only
+to a normal user, so on Windows the app copies the bootstrapper into `WorkingDirectory` and runs
+SteamCMD from there; a bare `steamcmd.exe` redownloads the rest of its client on first launch. On
+other platforms a read-only install directory is reported rather than worked around.
 
 When SteamCMD is enabled but fails, the app falls back to the API automatically and records why in
 the fetch log shown on **Manage**.

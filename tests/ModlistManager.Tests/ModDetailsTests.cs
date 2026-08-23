@@ -80,7 +80,9 @@ public class ModDetailsTests : IDisposable
         var api = StubApi("A Mod", "blurb\r\nWorkshop ID: 111\r\nMod ID: StubbedMod");
         var options = Options.Create(new SteamCmdOptions { Enabled = false });
         var fetch = new ModIdFetchService(
-            queue, _dbFactory, api, new SteamCmdModInfoReader(options), options,
+            queue, _dbFactory, api,
+            new SteamCmdModInfoReader(options, new SteamCmdInstallResolver(options, NullLogger<SteamCmdInstallResolver>.Instance)),
+            options,
             NullLogger<ModIdFetchService>.Instance);
 
         await fetch.StartAsync(CancellationToken.None);

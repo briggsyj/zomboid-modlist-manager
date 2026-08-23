@@ -70,6 +70,21 @@ doesn't wipe the other fields, and MudBlazor inputs need an explicit `name=` to 
 QEMU can execute, so it exits 1 with no output at all. It's off by default; Mod IDs come from the
 Steam Workshop API instead. Don't reintroduce it as the primary path.
 
+**SteamCMD owns the directory its executable sits in.** Config, logs and downloaded workshop content
+all go next to `steamcmd.exe` - there is no separate data directory, and `force_install_dir` does not
+move workshop downloads. If that directory is read-only it dies with `STATUS_STACK_OVERFLOW`
+(`0xC00000FD`) and no message at all, which is what a Chocolatey install under `C:\ProgramData` does
+to a non-elevated app. `SteamCmdInstallResolver` handles this by copying the bootstrapper somewhere
+writable; don't "simplify" it back into running the installed executable in place.
+
+**`steamcmd` on PATH may be a launcher, not the binary.** Chocolatey puts a ~130KB shim there that
+re-launches the real executable elsewhere, so copying what PATH resolves to gets you a copy of the
+shim. `--shimgen-noop` makes it print its target.
+
+**Don't treat SteamCMD's exit code as the source of truth.** It reports non-zero for benign states,
+notably straight after it self-updates. Whether the content actually appeared on disk is the reliable
+signal; the exit code is only worth reading to explain an empty download.
+
 **Give new non-nullable columns a sensible default in the migration.** `Mod.IsActive` is mapped with
 `HasDefaultValue(true)` so existing rows stay active on upgrade - without it a bool column defaults
 to `false` and would have silently emptied every server's `Mods=` export.

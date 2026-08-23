@@ -9,7 +9,7 @@ namespace ModlistManager.Services;
 /// mod.info file(s) it contains. This is the authoritative source, but requires SteamCMD to be
 /// installed and actually runnable on the host - see <see cref="SteamCmdOptions.Enabled"/>.
 /// </summary>
-public class SteamCmdModInfoReader(IOptions<SteamCmdOptions> options)
+public class SteamCmdModInfoReader(IOptions<SteamCmdOptions> options, SteamCmdInstallResolver installResolver)
 {
     private readonly SteamCmdOptions _options = options.Value;
 
@@ -17,32 +17,37 @@ public class SteamCmdModInfoReader(IOptions<SteamCmdOptions> options)
 
     public async Task<Result> ReadModIdsAsync(string workshopId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_options.WorkshopContentRoot))
+        var resolved = await installResolver.ResolveAsync(cancellationToken);
+        if (resolved.Install is null)
         {
-            return new Result([], "SteamCmd:WorkshopContentRoot is not configured.");
+            return new Result([], resolved.Error);
         }
 
         var contentDir = Path.Combine(
-            _options.WorkshopContentRoot, "steamapps", "workshop", "content", _options.AppId, workshopId);
+            resolved.Install.SteamRoot, "steamapps", "workshop", "content", _options.AppId, workshopId);
 
-        var run = await RunSteamCmdAsync(workshopId, cancellationToken);
-        if (!run.Success)
-        {
-            return new Result([], run.Message);
-        }
+        var run = await RunSteamCmdAsync(resolved.Install, workshopId, cancellationToken);
 
+        // The exit code is checked only as a fallback for explaining an empty download: SteamCMD
+        // reports non-zero for benign states too (notably straight after it self-updates), so the
+        // content on disk is the more reliable signal that the download worked.
         if (!Directory.Exists(contentDir))
         {
-            return new Result([],
-                $"SteamCMD reported success but no content appeared at {contentDir} (check SteamCmd:WorkshopContentRoot).");
+            return new Result([], run.Success
+                ? $"reported success but no content appeared at {contentDir} (set SteamCmd:WorkshopContentRoot if SteamCMD stores it elsewhere)."
+                : run.Message);
         }
 
         var modInfoFiles = ModInfoParser.FindModInfoFiles(contentDir);
+
+        // Mods commonly ship the same mod.info more than once - once at the mod root and again under
+        // a per-build subdirectory (42/) - so the same ID would otherwise be recorded twice.
         var discovered = new List<PzModIdResult>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in modInfoFiles)
         {
             var content = await File.ReadAllTextAsync(file, cancellationToken);
-            if (ModInfoParser.Parse(content) is { } parsed)
+            if (ModInfoParser.Parse(content) is { } parsed && seen.Add(parsed.ModId))
             {
                 discovered.Add(new PzModIdResult(parsed.ModId, parsed.ModName));
             }
@@ -58,12 +63,16 @@ public class SteamCmdModInfoReader(IOptions<SteamCmdOptions> options)
             : new Result([], $"Downloaded content had no mod.info with an id= field ({modInfoFiles.Count} scanned).");
     }
 
-    private async Task<(bool Success, string? Message)> RunSteamCmdAsync(string workshopId, CancellationToken cancellationToken)
+    private async Task<(bool Success, string? Message)> RunSteamCmdAsync(
+        SteamCmdInstall install, string workshopId, CancellationToken cancellationToken)
     {
         var startInfo = new ProcessStartInfo
         {
-            FileName = _options.ExecutablePath,
+            FileName = install.ExecutablePath,
             Arguments = $"+login anonymous +workshop_download_item {_options.AppId} {workshopId} +quit",
+            // SteamCMD resolves some of its own state relative to the current directory, so run it
+            // from the directory it owns rather than from wherever the web app happens to be.
+            WorkingDirectory = Path.GetDirectoryName(install.ExecutablePath)!,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -82,7 +91,7 @@ public class SteamCmdModInfoReader(IOptions<SteamCmdOptions> options)
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or FileNotFoundException)
         {
-            return (false, $"executable not found at '{_options.ExecutablePath}'.");
+            return (false, $"could not start '{install.ExecutablePath}': {ex.Message}");
         }
 
         process.BeginOutputReadLine();
@@ -105,6 +114,14 @@ public class SteamCmdModInfoReader(IOptions<SteamCmdOptions> options)
         {
             var output = (stdOut.ToString() + stdErr).Trim();
 
+            if (process.ExitCode == StackOverflowExitCode)
+            {
+                return (false,
+                    $"crashed on startup (exit code 0x{StackOverflowExitCode:X8}) while running from " +
+                    $"'{Path.GetDirectoryName(install.ExecutablePath)}'. SteamCMD does this when it cannot " +
+                    "write to its own directory; set SteamCmd:WorkingDirectory to somewhere writable.");
+            }
+
             // SteamCMD only ships a 32-bit x86 binary. On an arm64 host emulating amd64 (Apple
             // Silicon Docker) it cannot execute at all, and the giveaway is a non-zero exit with
             // no output whatsoever - worth calling out, since it otherwise looks like a network error.
@@ -120,6 +137,9 @@ public class SteamCmdModInfoReader(IOptions<SteamCmdOptions> options)
 
         return (true, null);
     }
+
+    /// <summary>Windows STATUS_STACK_OVERFLOW, which is how SteamCMD fails in a read-only directory.</summary>
+    private const int StackOverflowExitCode = unchecked((int)0xC00000FD);
 
     private static void TryKill(Process process)
     {
